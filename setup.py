@@ -9,13 +9,13 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='dumpfolding',
+    name='funfolding',
     version='0.0.1',
 
-    description='A package to do f*** unfolding.',
+    description='Having fun with unfolding.',
     long_description=long_description,
 
-    url='https://github.com/mbrner/dumpfolding',
+    url='https://github.com/mbrner/funfolding',
 
     author='Mathis Boerner',
     author_email='mathis.boerner@tu-dortmund.de',
