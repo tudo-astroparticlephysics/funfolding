@@ -3,8 +3,26 @@ import random
 import numpy as np
 from scipy import stats
 
+import copy
+
 
 random.seed(111)
+
+
+def f_entropy(p):
+    # Convert values to probability
+    p = np.bincount(p) / float(p.shape[0])
+
+    ep = stats.entropy(p)
+    if ep == -float('inf'):
+        return 0.0
+    return ep
+
+
+def information_gain(y, splits):
+    splits_entropy = sum([f_entropy(split) * (float(split.shape[0]) /
+                          y.shape[0]) for split in splits])
+    return f_entropy(y) - splits_entropy
 
 
 def split(X, y, value):
@@ -45,7 +63,10 @@ def xgb_criterion(y, left, right, loss):
 class Tree(object):
     """Recursive implementation of decision tree."""
 
-    def __init__(self, regression=False, criterion=None):
+    def __init__(self,
+                 regression=False,
+                 criterion=information_gain,
+                 cuts_happened={}):
         self.regression = regression
         self.impurity = None
         self.threshold = None
@@ -54,23 +75,33 @@ class Tree(object):
         self.criterion = criterion
         self.loss = None
 
+        self.cuts_happened = cuts_happened
+
         self.left_child = None
         self.right_child = None
+        self.resolution = None
 
     @property
     def is_terminal(self):
         return not bool(self.left_child and self.right_child)
 
-    def _find_splits(self, X):
+    def _find_splits(self, X, column):
+        X = X[:, column]
         """Find all possible split values."""
         split_values = set()
 
+        already_cutted = np.array(self.cuts_happened.get(column, None))
+
         # Get unique values in a sorted order
         x_unique = list(np.unique(X))
+
         for i in range(1, len(x_unique)):
             # Find a point between two values
             average = (x_unique[i - 1] + x_unique[i]) / 2.0
-            split_values.add(average)
+            if already_cutted is not None:
+                diff = np.absolute(average - already_cutted)
+                if diff >= self.resolution[column]:
+                    split_values.add(average)
 
         return list(split_values)
 
@@ -82,7 +113,7 @@ class Tree(object):
         max_gain, max_col, max_val = None, None, None
 
         for column in subset:
-            split_values = self._find_splits(X[:, column])
+            split_values = self._find_splits(X, column=column)
             for value in split_values:
                 if self.loss is None:
                     # Random forest
@@ -99,6 +130,10 @@ class Tree(object):
 
                 if (max_gain is None) or (gain > max_gain):
                     max_col, max_val, max_gain = column, value, gain
+        if max_col in self.cuts_happened.keys():
+            self.cuts_happened.append(max_col)
+        else:
+            self.cuts_happened = [max_col]
         return max_col, max_val, max_gain
 
     def train(self,
@@ -108,7 +143,8 @@ class Tree(object):
               min_samples_split=10,
               max_depth=None,
               minimum_gain=0.01,
-              loss=None):
+              loss=None,
+              resolution=None):
         """Build a decision tree from training set.
 
         Parameters
@@ -128,7 +164,13 @@ class Tree(object):
             Minimum gain required for splitting.
         loss : function, default None
             Loss function for gradient boosting.
+        resolution : None or array-like
+            Min distant for multiple cuts in the same Feature.
         """
+        if resolution is None:
+            self.resolution = np.zeros(X.shape[1])
+        else:
+            self.resolution = resolution
 
         if not isinstance(target, dict):
             target = {'y': target}
@@ -162,7 +204,9 @@ class Tree(object):
                 X, target, column, value)
 
             # Grow left and right child
-            self.left_child = Tree(self.regression, self.criterion)
+            self.left_child = Tree(self.regression,
+                                   self.criterion,
+                                   copy.copy(self.cuts_happened))
             self.left_child.train(
                 left_X,
                 left_target,
@@ -172,7 +216,9 @@ class Tree(object):
                 minimum_gain,
                 loss)
 
-            self.right_child = Tree(self.regression, self.criterion)
+            self.right_child = Tree(self.regression,
+                                    self.criterion,
+                                    copy.copy(self.cuts_happened))
             self.right_child.train(
                 right_X,
                 right_target,
