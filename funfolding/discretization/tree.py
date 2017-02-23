@@ -37,13 +37,11 @@ def get_split_mask(X, column, value):
     return left_mask, right_mask
 
 
-def split_dataset(X, target, column, value, return_X=True):
+def split_dataset(X, y, column, value, return_X=True):
     left_mask, right_mask = get_split_mask(X, column, value)
 
-    left, right = {}, {}
-    for key in target.keys():
-        left[key] = target[key][left_mask]
-        right[key] = target[key][right_mask]
+    left = y[left_mask]
+    right = y[right_mask]
 
     if return_X:
         left_X, right_X = X[left_mask], X[right_mask]
@@ -52,34 +50,31 @@ def split_dataset(X, target, column, value, return_X=True):
         return left, right
 
 
-def xgb_criterion(y, left, right, loss):
-    left = loss.gain(left['actual'], left['y_pred'])
-    right = loss.gain(right['actual'], right['y_pred'])
-    initial = loss.gain(y['actual'], y['y_pred'])
-    gain = left + right - initial
-    return gain
-
-
-class Tree(object):
+class BaseTree(object):
+    leaf_list = []
     """Recursive implementation of decision tree."""
-
     def __init__(self,
+                 parent=None,
                  regression=False,
                  criterion=information_gain,
                  cuts_happened={}):
+        self.parent = parent
         self.regression = regression
+        self.criterion = criterion
+        self.cuts_happened = cuts_happened
+
+        #  Set at the Beginning of the Training
+        self.n_classes = None
+        self.resolution = None
+
+        #  Results of Training
+        self.left_child = None
+        self.right_child = None
         self.impurity = None
         self.threshold = None
         self.column_index = None
         self.outcome = None
-        self.criterion = criterion
-        self.loss = None
-
-        self.cuts_happened = cuts_happened
-
-        self.left_child = None
-        self.right_child = None
-        self.resolution = None
+        self.leaf_idx = None
 
     @property
     def is_terminal(self):
@@ -87,63 +82,42 @@ class Tree(object):
 
     def _find_splits(self, X, column):
         X = X[:, column]
-        """Find all possible split values."""
-        split_values = set()
+        x_unique = np.unique(X)
+        split_values = (x_unique[1:] + x_unique[:-1]) / 2.
 
-        already_cutted = np.array(self.cuts_happened.get(column, None))
+        if self.resolution is not None:
+            already_cutted = np.array(self.cuts_happened.get(column, []))
+            resolution_column = self.resolution[column]
+            for cut_i in already_cutted:
+                mask = np.absolute(split_values - cut_i) >= resolution_column
+                split_values = split_values[mask]
+        return split_values
 
-        # Get unique values in a sorted order
-        x_unique = list(np.unique(X))
 
-        for i in range(1, len(x_unique)):
-            # Find a point between two values
-            average = (x_unique[i - 1] + x_unique[i]) / 2.0
-            if already_cutted is not None:
-                diff = np.absolute(average - already_cutted)
-                if diff >= self.resolution[column]:
-                    split_values.add(average)
-
-        return list(split_values)
-
-    def _find_best_split(self, X, target, n_features):
+    def _find_best_split(self, X, y, n_features):
         """Find best feature and value for a split. Greedy algorithm."""
 
         # Sample random subset of features
         subset = random.sample(list(range(0, X.shape[1])), n_features)
         max_gain, max_col, max_val = None, None, None
-
         for column in subset:
             split_values = self._find_splits(X, column=column)
             for value in split_values:
-                if self.loss is None:
-                    # Random forest
-                    splits = split(X[:, column], target['y'], value)
-                    gain = self.criterion(target['y'], splits)
-                else:
-                    # Gradient boosting
-                    left, right = split_dataset(X,
-                                                target,
-                                                column,
-                                                value,
-                                                return_X=False)
-                    gain = xgb_criterion(target, left, right, self.loss)
+                splits = split(X[:, column], y, value)
+                gain = self.criterion(y, splits)
 
                 if (max_gain is None) or (gain > max_gain):
                     max_col, max_val, max_gain = column, value, gain
-        if max_col in self.cuts_happened.keys():
-            self.cuts_happened.append(max_col)
-        else:
-            self.cuts_happened = [max_col]
         return max_col, max_val, max_gain
 
     def train(self,
               X,
-              target,
-              max_features=None,
+              y,
+              n_classes=None,
+              max_features='log',
               min_samples_split=10,
-              max_depth=None,
+              max_depth=-1,
               minimum_gain=0.01,
-              loss=None,
               resolution=None):
         """Build a decision tree from training set.
 
@@ -152,43 +126,37 @@ class Tree(object):
 
         X : array-like
             Feature dataset.
-        target : dictionary or array-like
+        y : array-like
             Target values.
         max_features : int or None
-            The number of features to consider when looking for the best split.
+            The number of features to consider when looking for the best        split.
         min_samples_split : int
-            The minimum number of samples required to split an internal node.
+            The minimum number of samples required to split an internal         node.
         max_depth : int
             Maximum depth of the tree.
         minimum_gain : float, default 0.01
             Minimum gain required for splitting.
-        loss : function, default None
-            Loss function for gradient boosting.
         resolution : None or array-like
             Min distant for multiple cuts in the same Feature.
         """
+        if not self.regression:
+            self.n_classes = n_classes
         if resolution is None:
             self.resolution = np.zeros(X.shape[1])
         else:
             self.resolution = resolution
-
-        if not isinstance(target, dict):
-            target = {'y': target}
-
-        # Loss for gradient boosting
-        if loss is not None:
-            self.loss = loss
-
         try:
             # Exit from recursion using assert syntax
             assert (X.shape[0] > min_samples_split)
-            assert (max_depth > 0)
+            assert (max_depth != 0)
 
             if max_features is None:
                 max_features = X.shape[1]
+            elif max_features == 'log':
+                max_features = int(np.log(X.shape[1]))
 
             column, value, gain = self._find_best_split(
-                X, target, max_features)
+                X, y, max_features)
             assert gain is not None
             if self.regression:
                 assert (gain != 0)
@@ -198,53 +166,62 @@ class Tree(object):
             self.column_index = column
             self.threshold = value
             self.impurity = gain
+            if column in self.cuts_happened.keys():
+                self.cuts_happened[column].append(value)
+            else:
+                self.cuts_happened[column] = [value]
 
             # Split dataset
-            left_X, right_X, left_target, right_target = split_dataset(
-                X, target, column, value)
+            left_X, right_X, left_y, right_y = split_dataset(
+                X, y, column, value)
 
             # Grow left and right child
-            self.left_child = Tree(self.regression,
-                                   self.criterion,
-                                   copy.copy(self.cuts_happened))
+            self.left_child = self.__class__(
+                parent=self,
+                regression=self.regression,
+                criterion=self.criterion,
+                cuts_happened=copy.copy(self.cuts_happened))
             self.left_child.train(
-                left_X,
-                left_target,
-                max_features,
-                min_samples_split,
-                max_depth - 1,
-                minimum_gain,
-                loss)
+                X=left_X,
+                y=left_y,
+                n_classes=self.n_classes,
+                max_features=max_features,
+                min_samples_split=min_samples_split,
+                max_depth=max_depth-1,
+                minimum_gain=minimum_gain,
+                resolution=resolution)
 
-            self.right_child = Tree(self.regression,
-                                    self.criterion,
-                                    copy.copy(self.cuts_happened))
+            self.right_child = self.__class__(
+                parent=self,
+                regression=self.regression,
+                criterion=self.criterion,
+                cuts_happened=copy.copy(self.cuts_happened))
             self.right_child.train(
-                right_X,
-                right_target,
-                max_features,
-                min_samples_split,
-                max_depth - 1,
-                minimum_gain,
-                loss)
-        except AssertionError:
-            self._calculate_leaf_value(target)
+                X=right_X,
+                y=right_y,
+                n_classes=self.n_classes,
+                max_features=max_features,
+                min_samples_split=min_samples_split,
+                max_depth=max_depth-1,
+                minimum_gain=minimum_gain,
+                resolution=resolution)
 
-    def _calculate_leaf_value(self, targets):
+        except AssertionError:
+            self._calculate_leaf_value(y)
+
+    def _calculate_leaf_value(self, y):
         """Find optimal value for leaf."""
-        if self.loss is not None:
-            # Gradient boosting
-            self.outcome = self.loss.approximate(
-                targets['actual'], targets['y_pred'])
+        if self.regression:
+            # Mean value for regression task
+            self.outcome = np.mean(y)
         else:
-            # Random Forest
-            if self.regression:
-                # Mean value for regression task
-                self.outcome = np.mean(targets['y'])
-            else:
-                # Probability for classification task
-                self.outcome = stats.itemfreq(
-                    targets['y'])[:, 1] / float(targets['y'].shape[0])
+            # Probability for classification task
+            self.outcome = np.zeros(self.n_classes)
+            freq = stats.itemfreq(y)
+            for idx, val in freq:
+                self.outcome[idx] = val / len(y)
+        self.leaf_idx = len(self.leaf_list)
+        self.leaf_list.append(self)
 
     def predict_row(self, row):
         """Predict single row."""
@@ -256,7 +233,115 @@ class Tree(object):
         return self.outcome
 
     def predict(self, X):
-        result = np.zeros(X.shape[0])
+        if self.regression:
+            result = np.zeros(X.shape[0])
+        else:
+            result = np.zeros((X.shape[0], self.n_classes))
         for i in range(X.shape[0]):
             result[i] = self.predict_row(X[i, :])
         return result
+
+    def apply(self, X):
+        result = np.zeros(X.shape[0], dtype=int)
+        for i in range(X.shape[0]):
+            result[i] = self.apply_row(X[i, :])
+        return result
+
+    def apply_row(self, row):
+        """Apply single row."""
+        if not self.is_terminal:
+            if row[self.column_index] < self.threshold:
+                return self.left_child.apply_row(row)
+            else:
+                return self.right_child.apply_row(row)
+        return self.leaf_idx
+
+
+class TreeBinning(object):
+    def __init__(self,
+                 regression=False,
+                 criterion='information_gain',
+                 max_features='log',
+                 min_samples_split=10,
+                 max_depth=-1,
+                 minimum_gain=0.01):
+        class Tree(BaseTree):
+            leaf_list = []
+
+
+        self.TreeClass = Tree
+
+        if criterion.lower() == 'information_gain':
+            criterion = information_gain
+        else:
+            raise ValueError('{} as criterion unknown!'.format(criterion))
+        self.root = self.TreeClass(regression=regression,
+                                   criterion=criterion)
+        self.tree_ops = {'max_features': max_features,
+                         'min_samples_split': min_samples_split,
+                         'max_depth': max_depth,
+                         'minimum_gain': minimum_gain}
+        self.encoding = None
+
+    def fit(self,
+              X,
+              y,
+              resolution=None):
+        self.encoding = None
+        if self.root.regression:
+            n_classes = None
+        else:
+            if y.dtype == float:
+                raise ValueError('For classification y has to be an array '
+                                 'of ints!')
+            train_dist = np.bincount(y)
+            if any(train_dist == 0):
+                y_encoded = np.zeros_like(y, dtype=int)
+                new_idx = 0
+                for idx, val in enumerate(train_dist):
+                    if val > 0:
+                        y_encoded[np.where(y == idx)[0]] = new_idx
+                        new_idx += 1
+                y = y_encoded
+                n_classes = new_idx
+            else:
+                n_classes = len(train_dist)
+        if resolution is None:
+            resolution = np.zeros(X.shape[1])
+        elif not len(resolution) == X.shape[1]:
+            return ValueError('len(\'resolution\') has be equal to the number '
+                              'of features!')
+        self.root.train(X=X,
+                        y=y,
+                        n_classes=n_classes,
+                        resolution=resolution,
+                        **self.tree_ops)
+
+    def predict(self, X):
+        return self.root.predict(X)
+
+    def apply(self, X):
+        return self.root.apply(X)
+
+    def get_leaf(self, idx):
+        return self.root.leaf_list[idx]
+
+    def decision_path(self, X, column_names=None):
+        if isinstance(X, int):
+            node = self.get_leaf(X)
+        elif not isinstance(X, BaseTree):
+            idx = self.root.apply_row(X)
+            node = self.get_leaf(idx)
+        cuts = []
+        while node is not None:
+            if node.is_terminal:
+                cuts.append('Leaf {}'.format(node.leaf_idx))
+            else:
+                col = node.column_index
+                if column_names is not None:
+                    col = column_names[col]
+                threshold = node.threshold
+                cuts.append('Cut {} > {}'.format(col, threshold))
+            node = node.parent
+        for i, cut in enumerate(cuts[::-1]):
+            print('Depth {}: {}'.format(i, cut))

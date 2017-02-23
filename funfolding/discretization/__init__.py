@@ -1,4 +1,4 @@
-from .tree import Tree
+from .tree import TreeBinning
 
 
-__all__ = ['Tree']
+__all__ = ['TreeBinning']
