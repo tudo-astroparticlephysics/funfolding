@@ -1,16 +1,10 @@
-import random
-
 import numpy as np
 from scipy import stats
-
+from sklearn.metrics import mean_squared_error
 import copy
 
 
-random.seed(111)
-
-
 def f_entropy(p):
-    # Convert values to probability
     p = np.bincount(p) / float(p.shape[0])
 
     ep = stats.entropy(p)
@@ -18,11 +12,22 @@ def f_entropy(p):
         return 0.0
     return ep
 
+def f_mse(y):
+    y_pred = np.ones_like(y) * np.mean(y)
+    mse = mean_squared_error(y, y_pred)
+    return mse
+
 
 def information_gain(y, splits):
     splits_entropy = sum([f_entropy(split) * (float(split.shape[0]) /
                           y.shape[0]) for split in splits])
     return f_entropy(y) - splits_entropy
+
+
+def mse(y, splits):
+    splits_mse = sum([f_mse(split) * (float(split.shape[0]) / y.shape[0])
+                      for split in splits])
+    return f_mse(y) - splits_mse
 
 
 def split(X, y, value):
@@ -52,15 +57,17 @@ def split_dataset(X, y, column, value, return_X=True):
 
 class BaseTree(object):
     leaf_list = []
-    """Recursive implementation of decision tree."""
     def __init__(self,
                  parent=None,
                  regression=False,
-                 criterion=information_gain,
-                 cuts_happened={}):
+                 cuts_happened={},
+                 random_state=None):
         self.parent = parent
         self.regression = regression
-        self.criterion = criterion
+        if regression:
+            self.criterion = mse
+        else:
+            self.criterion = information_gain
         self.cuts_happened = cuts_happened
 
         #  Set at the Beginning of the Training
@@ -75,6 +82,9 @@ class BaseTree(object):
         self.column_index = None
         self.outcome = None
         self.leaf_idx = None
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
+        self.random_state = random_state
 
     @property
     def is_terminal(self):
@@ -95,10 +105,8 @@ class BaseTree(object):
 
 
     def _find_best_split(self, X, y, n_features):
-        """Find best feature and value for a split. Greedy algorithm."""
-
-        # Sample random subset of features
-        subset = random.sample(list(range(0, X.shape[1])), n_features)
+        subset = self.random_state.choice(range(X.shape[1]),
+                                          size=n_features)
         max_gain, max_col, max_val = None, None, None
         for column in subset:
             split_values = self._find_splits(X, column=column)
@@ -119,26 +127,6 @@ class BaseTree(object):
               max_depth=-1,
               minimum_gain=0.01,
               resolution=None):
-        """Build a decision tree from training set.
-
-        Parameters
-        ----------
-
-        X : array-like
-            Feature dataset.
-        y : array-like
-            Target values.
-        max_features : int or None
-            The number of features to consider when looking for the best        split.
-        min_samples_split : int
-            The minimum number of samples required to split an internal         node.
-        max_depth : int
-            Maximum depth of the tree.
-        minimum_gain : float, default 0.01
-            Minimum gain required for splitting.
-        resolution : None or array-like
-            Min distant for multiple cuts in the same Feature.
-        """
         if not self.regression:
             self.n_classes = n_classes
         if resolution is None:
@@ -146,7 +134,6 @@ class BaseTree(object):
         else:
             self.resolution = resolution
         try:
-            # Exit from recursion using assert syntax
             assert (X.shape[0] > min_samples_split)
             assert (max_depth != 0)
 
@@ -179,8 +166,8 @@ class BaseTree(object):
             self.left_child = self.__class__(
                 parent=self,
                 regression=self.regression,
-                criterion=self.criterion,
-                cuts_happened=copy.copy(self.cuts_happened))
+                cuts_happened=copy.copy(self.cuts_happened),
+                random_state=self.random_state)
             self.left_child.train(
                 X=left_X,
                 y=left_y,
@@ -194,8 +181,8 @@ class BaseTree(object):
             self.right_child = self.__class__(
                 parent=self,
                 regression=self.regression,
-                criterion=self.criterion,
-                cuts_happened=copy.copy(self.cuts_happened))
+                cuts_happened=copy.copy(self.cuts_happened),
+                random_state=self.random_state)
             self.right_child.train(
                 X=right_X,
                 y=right_y,
@@ -210,12 +197,9 @@ class BaseTree(object):
             self._calculate_leaf_value(y)
 
     def _calculate_leaf_value(self, y):
-        """Find optimal value for leaf."""
         if self.regression:
-            # Mean value for regression task
             self.outcome = np.mean(y)
         else:
-            # Probability for classification task
             self.outcome = np.zeros(self.n_classes)
             freq = stats.itemfreq(y)
             for idx, val in freq:
@@ -224,7 +208,6 @@ class BaseTree(object):
         self.leaf_list.append(self)
 
     def predict_row(self, row):
-        """Predict single row."""
         if not self.is_terminal:
             if row[self.column_index] < self.threshold:
                 return self.left_child.predict_row(row)
@@ -248,7 +231,6 @@ class BaseTree(object):
         return result
 
     def apply_row(self, row):
-        """Apply single row."""
         if not self.is_terminal:
             if row[self.column_index] < self.threshold:
                 return self.left_child.apply_row(row)
@@ -260,23 +242,29 @@ class BaseTree(object):
 class TreeBinning(object):
     def __init__(self,
                  regression=False,
-                 criterion='information_gain',
                  max_features='log',
                  min_samples_split=10,
                  max_depth=-1,
-                 minimum_gain=0.01):
+                 minimum_gain=0.01,
+                 random_state=None):
         class Tree(BaseTree):
             leaf_list = []
+
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
+        self.random_state = random_state
 
 
         self.TreeClass = Tree
 
-        if criterion.lower() == 'information_gain':
-            criterion = information_gain
+        if regression:
+            criterion = mse
         else:
-            raise ValueError('{} as criterion unknown!'.format(criterion))
+            criterion = information_gain
         self.root = self.TreeClass(regression=regression,
-                                   criterion=criterion)
+                                   criterion=criterion,
+                                   cuts_happened={},
+                                   random_state=self.random_state)
         self.tree_ops = {'max_features': max_features,
                          'min_samples_split': min_samples_split,
                          'max_depth': max_depth,
@@ -320,7 +308,7 @@ class TreeBinning(object):
     def predict(self, X):
         return self.root.predict(X)
 
-    def apply(self, X):
+    def digitize(self, X):
         return self.root.apply(X)
 
     def get_leaf(self, idx):
