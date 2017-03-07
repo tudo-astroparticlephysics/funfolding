@@ -48,4 +48,4 @@ class TreeBinningSklearn(object):
 
     def decision_path(self, X, column_names=None):
         indicator = self.tree.decision_path(X)
-        print indicator
+        return indicator
