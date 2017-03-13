@@ -15,7 +15,7 @@ class Discretization:
     def digitize(self, X=None, sample_weights=None):
         self.logger.debug('Digitizing Data')
 
-    def reduce(self, X=None):
+    def merge(self, X=None):
         self.logger.debug('Reducing the model')
         if self.status == -1:
             raise RuntimeError("Run 'fit' before 'reduce'!")

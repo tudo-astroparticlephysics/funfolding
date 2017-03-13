@@ -21,7 +21,6 @@ setup(
     author_email='mathis.boerner@tu-dortmund.de',
 
     license='MIT',
-
     classifiers=[
         'Development Status :: 3 - Alpha',
 

@@ -14,8 +14,8 @@ def visualize_classic_binning(ax,
                               counted=None,
                               weights=None,
                               cmap='viridis',
-                              linecolor='k',
-                              linewidth=2.,
+                              linecolor='0.5',
+                              linewidth=1.,
                               log_c=False,
                               zorder=5):
     if binning.n_dims != 2:
@@ -36,44 +36,59 @@ def visualize_classic_binning(ax,
         norm = colors.Normalize(vmin=c_min, vmax=c_max)
     colz = cmap(norm(counted))
 
-    for t_label, i_label in binning.t_to_i.items():
-        if binning.is_oor[i_label]:
-            continue
-        visible_edges = []
-        invisible_edges = []
-        if isinstance(t_label, tuple):
-            t_label = [t_label]
-        for t_label in t_label:
-            #  Plot edges
-            var_1_h = binning.edges[0][t_label[0]]
-            var_1_l = binning.edges[0][t_label[0] - 1]
-            var_2_h = binning.edges[1][t_label[1]]
-            var_2_l = binning.edges[1][t_label[1] - 1]
-            temp_edges = []
-            temp_edges.append([var_1_h, var_1_h, var_2_l, var_2_h])
-            temp_edges.append([var_1_l, var_1_l, var_2_l, var_2_h])
-            temp_edges.append([var_1_l, var_1_h, var_2_l, var_2_l])
-            temp_edges.append([var_1_l, var_1_h, var_2_h, var_2_h])
-            for e in temp_edges:
-                if (e not in visible_edges):
-                    if (e not in invisible_edges):
-                        visible_edges.append(copy(e))
-                else:
-                    visible_edges.remove(e)
-                    invisible_edges.append(copy(e))
+    plotted_edges = set()
+    for i_label, t_labels in binning.i_to_t.items():
+        if isinstance(t_labels, tuple):
+            t_labels = [t_labels]
+        visible_edges = set()
+        invis_edges = set()
+        for t_label in t_labels:
+            fill_bin = True
+            try:
+                var_1_h = binning.edges[0][t_label[0]]
+            except IndexError:
+                var_1_h = None
+                fill_bin = False
+            try:
+                var_1_l = binning.edges[0][t_label[0] - 1]
+            except IndexError:
+                var_1_l = None
+                fill_bin = False
+            try:
+                var_2_h = binning.edges[1][t_label[1]]
+            except IndexError:
+                var_2_h = None
+                fill_bin = False
+            try:
+                var_2_l = binning.edges[1][t_label[1] - 1]
+            except IndexError:
+                var_2_l = None
+                fill_bin = False
+            temp_edges = [(var_1_h, var_1_h, var_2_l, var_2_h),
+                          (var_1_l, var_1_l, var_2_l, var_2_h),
+                          (var_1_l, var_1_h, var_2_l, var_2_l),
+                          (var_1_l, var_1_h, var_2_h, var_2_h)]
+            for edge in temp_edges:
+                if all([e_i is not None for e_i in edge]):
+                    if edge not in visible_edges:
+                        if edge not in invis_edges:
+                            visible_edges.add(edge)
+                    else:
+                        visible_edges.remove(edge)
+                        invis_edges.add(edge)
+            if fill_bin:
+                ax.fill([var_1_l, var_1_l, var_1_h, var_1_h],
+                        [var_2_l, var_2_h, var_2_h, var_2_l],
+                        color=colz[i_label],
+                        zorder=zorder)
         for e in visible_edges:
-            ax.plot(e[:2], e[2:],
-                    lw=linewidth,
-                    color=linecolor,
-                    ls='-',
-                    zorder=zorder)
-        if binning.is_oor[i_label]:
-            continue
-
-        ax.fill([var_1_l, var_1_l, var_1_h, var_1_h],
-                [var_2_l, var_2_h, var_2_h, var_2_l],
-                color=colz[i_label],
-                zorder=zorder)
+            if e not in plotted_edges:
+                ax.plot(e[:2], e[2:],
+                        lw=linewidth,
+                        color=linecolor,
+                        ls='-',
+                        zorder=zorder)
+                plotted_edges.add(e)
     #cbar = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
     ax.set_xlim(binning.edges[0][0], binning.edges[0][-1])
     ax.set_ylim(binning.edges[1][0], binning.edges[1][-1])

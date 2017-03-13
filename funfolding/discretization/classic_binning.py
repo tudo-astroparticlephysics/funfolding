@@ -6,6 +6,8 @@ import itertools
 import numpy as np
 from scipy.stats import itemfreq
 
+import copy
+
 from astroML.density_estimation.bayesian_blocks import bayesian_blocks
 
 class ClassicBinning(Discretization):
@@ -13,7 +15,8 @@ class ClassicBinning(Discretization):
     def __init__(self,
                  bins,
                  range=None,
-                 oor_handle='individual'):
+                 oor_handle='individual',
+                 random_state=None):
         super(ClassicBinning, self).__init__()
         self.hist_func = np.histogram
         self.n_dims = len(bins)
@@ -26,9 +29,12 @@ class ClassicBinning(Discretization):
         self.t_to_i = None
         self.i_to_t = None
         self.n_bins = None
-        self.is_oor = None
+        self.oor_tuples = None
         self.oor_handle = oor_handle
-
+        if not isinstance(random_state, np.random.RandomState):
+            self.random_state = np.random.RandomState(random_state)
+        else:
+            self.random_state = random_state
 
     def fit(self,
             X,
@@ -76,23 +82,70 @@ class ClassicBinning(Discretization):
         is_oor = lambda tup_i: any(np.array(tup_i) == 0) or \
             any([t == len(self.edges[i]) for i, t in enumerate(tup_i)])
         self.i_to_t = {self.t_to_i[t]: t for t in self.t_to_i.keys()}
-        self.is_oor = np.array([is_oor(self.i_to_t[i])
-                                for i in range(len(self.i_to_t))],
-                               dtype=bool)
+        self.oor_tuples = set(t for t in self.t_to_i.keys() if is_oor(t))
 
-    def reduce(self,
-               X,
-               threshold,
-               sample_weight=None,
-               y=None,
-               right=False,
-               mode='closest'):
+    def copy(self):
+        clone = ClassicBinning(bins=self.bins)
+        clone.bins = copy.deepcopy(self.bins)
+        clone.range = copy.deepcopy(self.range)
+        clone.edges = copy.deepcopy(self.edges)
+        clone.t_to_i = copy.deepcopy(self.t_to_i)
+        clone.i_to_t = copy.deepcopy(self.i_to_t)
+        clone.n_bins = copy.deepcopy(self.n_bins)
+        clone.oor_tuples = copy.deepcopy(self.oor_tuples)
+        clone.oor_handle = copy.deepcopy(self.oor_handle)
+        clone.random_state = copy.deepcopy(self.random_state)
+        return clone
+
+    def __init__(self,
+                 bins,
+                 range=None,
+                 oor_handle='individual',
+                 random_state=None):
+        super(ClassicBinning, self).__init__()
+        self.hist_func = np.histogram
+        self.n_dims = len(bins)
+        self.bins = bins
+        if range is None:
+            self.range = [None] * self.n_dims
+        else:
+            self.range = range
+        self.edges = []
+        self.t_to_i = None
+        self.i_to_t = None
+        self.n_bins = None
+        self.oor_tuples = None
+        self.oor_handle = oor_handle
+        if not isinstance(random_state, np.random.RandomState):
+            self.random_state = np.random.RandomState(random_state)
+        else:
+            self.random_state = random_state
+
+    def __merge__(self,
+                   X,
+                   min_samples=None,
+                   max_bins=None,
+                   sample_weight=None,
+                   y=None,
+                   right=False,
+                   mode='closest'):
         super(ClassicBinning, self).__init__()
         n_merg_iterations = 0
         binned = self.digitize(X, right=right)
         counted = np.bincount(binned,
                               weights=sample_weight,
                               minlength=self.n_bins)
+        original_counted = np.sum(counted)
+
+        if min_samples is None and max_bins is None:
+            raise ValueError("Either 'min_samples' or 'max_bins' have "
+                             "to be set!")
+        elif min_samples is None:
+            min_samples = max(counted)
+        elif max_bins is None:
+            max_bins = self.n_bins
+
+
         if mode == 'similar':
             if y is None:
                 raise ValueError("For mode 'similar' labels are needed!")
@@ -113,25 +166,60 @@ class ClassicBinning(Discretization):
         else:
             raise ValueError("'closest', 'lowest' and 'similar' are "
                              "valid options for keyword 'mode'")
-        shuffel_idx = np.random.choice(self.n_bins, self.n_bins, replace=False)
         while True:
-            min_idx = shuffel_idx[np.argmin(counted[shuffel_idx])]
-            min_val = counted[min_idx]
-            if (min_val >= threshold) or (len(self.i_to_t.keys()) == 1):
-                break
-            else:
+            min_val = np.min(counted)
+            try:
+                assert min_val <= min_samples
+                n_bins = len(self.i_to_t.keys())
+                assert n_bins > 1 and n_bins <= max_bins
+                min_indices = np.where(counted == min_val)[0]
+                min_idx = self.random_state.choice(min_indices)
                 neighbors = self.__get_neighbors__(min_idx)
                 partner_bin = self.__get_bin_for_merge__(min_idx,
                                                          neighbors,
                                                          counted)
-                self.__merge_bins__(min_idx, partner_bin)
-                counted[partner_bin] += counted[min_idx]
+                kept_i_label, removed_i_label = self.__merge_bins__(
+                    min_idx,
+                    partner_bin)
+                counted[kept_i_label] += counted[removed_i_label]
                 mask = np.ones_like(counted, dtype=bool)
-                mask[min_idx] = False
+                mask[removed_i_label] = False
                 counted = counted[mask]
                 n_merg_iterations += 1
+                if np.sum(counted) != original_counted:
+                    raise RuntimeError('Events sum changed!')
+            except AssertionError:
+                break
+
         self.n_bins = len(self.i_to_t.keys())
-        return n_merg_iterations
+        return self
+
+    def merge(self,
+               X,
+               min_samples=None,
+               max_bins=None,
+               sample_weight=None,
+               y=None,
+               right=False,
+               mode='closest',
+               inplace=False):
+        if inplace:
+            return self.__merge__(X=X,
+                                  min_samples=min_samples,
+                                  max_bins=max_bins,
+                                  sample_weight=sample_weight,
+                                  y=y,
+                                  right=right,
+                                  mode=mode)
+        else:
+            clone = self.copy()
+            return clone.merge(X=X,
+                               min_samples=min_samples,
+                               sample_weight=sample_weight,
+                               y=y,
+                               right=right,
+                               mode=mode,
+                               inplace=True)
 
     def __get_lowest_neighbor__(self, bin, neighbors, counted):
         counted_neighbors = counted[neighbors]
@@ -172,10 +260,25 @@ class ClassicBinning(Discretization):
             t_labels = [t_labels]
         n_bins = len(t_labels)
         cog = np.zeros((self.n_dims, n_bins))
+        mean_diff = [np.mean(np.diff(self.edges[i]))
+                     for i in range(self.n_dims)]
         for j, t_label in enumerate(t_labels):
             for i, bin_i in enumerate(t_label):
-                cog[i, j] = (self.edges[i][bin_i] +
-                             self.edges[i][bin_i - 1]) / 2.
+                try:
+                    upper_edge = self.edges[i][bin_i]
+                except IndexError:
+                    upper_edge = None
+                try:
+                    lower_edge = self.edges[i][bin_i - 1]
+                except IndexError:
+                    lower_edge = None
+                if upper_edge is None and lower_edge is None:
+                    raise ValueError('Invalid label!')
+                if upper_edge is None:
+                    upper_edge = lower_edge + mean_diff[i]
+                if lower_edge is None:
+                        lower_edge = upper_edge - mean_diff[i]
+                cog[i, j] = (upper_edge + lower_edge) / 2.
         return np.mean(cog, axis=1)
 
     def __get_neighbors__(self, i_label):
@@ -201,25 +304,41 @@ class ClassicBinning(Discretization):
                     neighbors.append(upper)
                 if (lower not in neighbors) and (lower not in t_labels):
                     neighbors.append(lower)
-        i_labels = [self.t_to_i[t]
-                    for t in neighbors if self.t_to_i[t] is not None]
+        i_labels = [self.t_to_i.get(t)
+                    for t in neighbors
+                    if t in self.t_to_i.keys()]
+        assert i_label not in i_labels
         return i_labels
 
-    def __merge_bins__(self, bin_a, bin_b):
-        t_labels = self.i_to_t[bin_a]
-        if isinstance(t_labels, tuple):
-            t_labels = [t_labels]
-        for t_label in t_labels:
-            self.t_to_i[t_label] = bin_b
-        for k, v in self.t_to_i.items():
-            if v > bin_a:
-                self.t_to_i[k] -= 1
+    def __merge_bins__(self, i_label_a, i_label_b):
+        t_labels_a = self.i_to_t[i_label_a]
+        if isinstance(t_labels_a, tuple):
+            t_labels_a = [t_labels_a]
+
+        t_labels_b = self.i_to_t[i_label_b]
+        if isinstance(t_labels_b, tuple):
+            t_labels_b = [t_labels_b]
+
+        if i_label_a > i_label_b:
+            removed_i_label = i_label_a
+            kept_i_label = i_label_b
+            for t_label_a_i in t_labels_a:
+                self.t_to_i[t_label_a_i] = i_label_b
+        else:
+            removed_i_label = i_label_b
+            kept_i_label = i_label_a
+            for t_label_b_i in t_labels_b:
+                self.t_to_i[t_label_b_i] = i_label_a
+
+        for t_label in self.t_to_i.keys():
+            if self.t_to_i[t_label] > removed_i_label:
+                self.t_to_i[t_label] -= 1
         self.i_to_t = {}
-        for k, v in self.t_to_i.items():
-            if v in self.i_to_t.keys():
-                if isinstance(self.i_to_t[v], list):
-                    self.i_to_t[v].append(k)
-                else:
-                    self.i_to_t[v] = [self.i_to_t[v], k]
-            else:
-                self.i_to_t[v] = k
+        for t_label, i_label in self.t_to_i.items():
+            try:
+                t_labels = self.i_to_t[i_label]
+                t_labels.append(t_label)
+            except KeyError:
+                t_labels = [t_label]
+            self.i_to_t[i_label] = t_labels
+        return kept_i_label, removed_i_label
