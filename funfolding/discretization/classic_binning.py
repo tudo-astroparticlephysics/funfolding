@@ -233,8 +233,12 @@ class ClassicBinning(Discretization):
             else:
                 mean_label[bin_a] = s / (counted[bin_a] + counted[bin_b])
                 remove_idx = bin_b
+
+
         mask = np.ones_like(mean_label, dtype=bool)
-        mask[remove_idx] = False
+        mask[remove_idx:] = False
+
+
         mean_label = mean_label[mask]
         return bin_b
 
