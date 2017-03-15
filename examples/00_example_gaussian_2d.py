@@ -11,7 +11,7 @@ if __name__ == '__main__':
         format='%(processName)-10s %(name)s %(levelname)-8s %(message)s',
         level=logging.INFO)
 
-    X = np.random.normal(size=20000)
+    X = np.random.normal(-5, 5, size=20000)
     X = X.reshape((10000, 2))
 
     y_mean = 1.5
@@ -37,12 +37,14 @@ if __name__ == '__main__':
                                              cmap='viridis')
     fig.savefig('00_example_gaussian_unmerged.png')
 
-    threshold = 20
+    threshold = 50
 
     closest = classic_binning.merge(X,
                                     min_samples=threshold,
                                     max_bins=None,
                                     mode='closest')
+    binned = closest.histogram(X)
+    print(min(binned))
     fig, ax = plt.subplots()
     discretization.visualize_classic_binning(ax,
                                              closest,
@@ -55,7 +57,8 @@ if __name__ == '__main__':
                                    min_samples=threshold,
                                    max_bins=None,
                                    mode='lowest')
-
+    binned = lowest.histogram(X)
+    print(min(binned))
     fig, ax = plt.subplots()
     discretization.visualize_classic_binning(ax,
                                              lowest,
@@ -64,30 +67,51 @@ if __name__ == '__main__':
                                              cmap='viridis')
     fig.savefig('00_example_gaussian_lowest.png')
 
+
+
+    fig, ax = plt.subplots(1, 2, figsize=(24, 9))
     similar_clf = classic_binning.merge(X,
                                         min_samples=threshold,
                                         max_bins=None,
                                         mode='similar',
                                         y=y_clf)
-
-    fig, ax = plt.subplots()
-    discretization.visualize_classic_binning(ax,
+    binned = similar_clf.histogram(X)
+    print(min(binned))
+    discretization.visualize_classic_binning(ax[0],
                                              similar_clf,
                                              X,
                                              log_c=False,
                                              cmap='viridis')
+    ax[1].hexbin(X[:, 0],
+                 X[:, 1],
+                 C=y_clf,
+                 gridsize=50,
+                 cmap='inferno')
+    ax[1].set_xlim([-5, 5])
+    ax[1].set_ylim([-5, 5])
     fig.savefig('00_example_gaussian_similar_clf.png')
 
+
+
+
+    fig, ax = plt.subplots(1, 2, figsize=(24, 9))
     similar_reg = classic_binning.merge(X,
                                     min_samples=threshold,
                                     max_bins=None,
                                     mode='similar',
                                     y=y_reg)
-
-    fig, ax = plt.subplots()
-    discretization.visualize_classic_binning(ax,
+    binned = similar_reg.histogram(X)
+    print(min(binned))
+    discretization.visualize_classic_binning(ax[0],
                                              similar_reg,
                                              X,
                                              log_c=False,
                                              cmap='viridis')
+    ax[1].hexbin(X[:, 0],
+                 X[:, 1],
+                 C=y_reg,
+                 gridsize=50,
+                 cmap='inferno')
+    ax[1].set_xlim([-5, 5])
+    ax[1].set_ylim([-5, 5])
     fig.savefig('00_example_gaussian_similar_reg.png')

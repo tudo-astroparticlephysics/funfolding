@@ -56,7 +56,7 @@ class ClassicBinning(Discretization):
         self.create_conversion_dict()
         self.n_bins = len(self.t_to_i.keys())
 
-    def digitize(self, X, sample_weights=None, right=False):
+    def digitize(self, X, sample_weight=None, right=False):
         super(ClassicBinning, self).digitize()
         tup_label = np.zeros((len(X), self.n_dims), dtype=int)
         for dim_i in range(self.n_dims):
@@ -66,11 +66,7 @@ class ClassicBinning(Discretization):
         return self.convert_tup_label(tup_label)
 
     def convert_tup_label(self, tup_label):
-        if self.t_to_i is None:
-            self.t_to_i = self.create_conversion_dict()
-
-        i_label = np.array([self.t_to_i.get(tuple(key), 0)
-                            for key in tup_label],
+        i_label = np.array([self.t_to_i[tuple(key)] for key in tup_label],
                            dtype=int)
         return i_label
 
@@ -211,7 +207,6 @@ class ClassicBinning(Discretization):
                                       counted,
                                       mean_label):
         counted_neighbors = counted[neighbors]
-        mean_label_neighbors = mean_label[neighbors]
         min_counted = np.min(counted_neighbors)
         if min_counted == 0 or counted[bin_a] == 0:
             bin_b = self.__get_closest_neighbor__(bin_a, neighbors, counted)

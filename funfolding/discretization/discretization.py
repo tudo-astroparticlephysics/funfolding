@@ -1,5 +1,8 @@
 import logging
 
+import numpy as np
+
+
 class Discretization:
     name = 'BaseClassDiscretization'
 
@@ -17,13 +20,19 @@ class Discretization:
         self.logger.debug('Digitizing Data')
 
     def histogram(self, X=None, sample_weight=None):
-        self.loggerl.debug('Building a histogram')
+        if sample_weight is not None:
+            original_sum = np.sum(sample_weight)
+        else:
+            original_sum = X.shape[0]
+        self.logger.debug('Building a histogram')
         if self.n_bins is None:
             raise RuntimeError("Numbers of bins unkown. Run 'fit' first!")
         binned = self.digitize(X=X, sample_weight=sample_weight)
-        return np.bincount(binned,
+        counted = np.bincount(binned,
                            weights=sample_weight,
                            minlength=self.n_bins)
+        assert np.sum(counted) == original_sum
+        return counted
 
     def merge(self, X=None):
         self.logger.debug('Reducing the model')

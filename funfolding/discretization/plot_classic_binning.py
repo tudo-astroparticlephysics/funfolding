@@ -9,10 +9,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def visualize_classic_binning(ax,
                               binning,
-                              X=None,
-                              binned=None,
-                              counted=None,
-                              weights=None,
+                              X,
+                              sample_weight=None,
                               cmap='viridis',
                               linecolor='0.5',
                               linewidth=1.,
@@ -20,20 +18,14 @@ def visualize_classic_binning(ax,
                               zorder=5):
     if binning.n_dims != 2:
         raise binning.InvalidDimension
-    if X is not None:
-        binned = binning.digitize(X, weights)
-    binned = binned[binned > 0]
-    if binned is not None:
-        counted = np.bincount(binned,
-                              weights=weights,
-                              minlength=binning.n_bins + 1)
+    counted = binning.histogram(X, sample_weight=sample_weight)
     cmap = matplotlib.cm.get_cmap(cmap)
-    c_min = np.min(counted)
     c_max = np.max(counted)
+    c_max = 40
     if log_c:
-        norm = colors.LogNorm(vmin=c_min, vmax=c_max)
+        norm = colors.LogNorm(vmin=0, vmax=c_max)
     else:
-        norm = colors.Normalize(vmin=c_min, vmax=c_max)
+        norm = colors.Normalize(vmin=0, vmax=c_max)
     colz = cmap(norm(counted))
 
     plotted_edges = set()
