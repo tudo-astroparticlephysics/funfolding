@@ -100,7 +100,7 @@ class ClassicBinning(Discretization):
                    y=None,
                    right=False,
                    mode='closest',
-                   merge_opts={}):
+                   **kwargs):
         n_merg_iterations = 0
         binned = self.digitize(X, right=right)
         counted = np.bincount(binned,
@@ -115,7 +115,6 @@ class ClassicBinning(Discretization):
             min_samples = original_sum
         elif max_bins is None:
             max_bins = 1
-        bookkept_arrays = [counted]
         if mode == 'similar':
             if y is None:
                 raise ValueError("For mode 'similar' labels are needed!")
@@ -124,14 +123,12 @@ class ClassicBinning(Discretization):
             else:
                 w = y * sample_weight
             no_entry = counted == 0
-            mean_label = np.bincount(binned,
+            self.mean_label = np.bincount(binned,
                                     weights=w,
                                     minlength=self.n_bins)
-            mean_label[no_entry] = np.nan
-            mean_label /= counted
+            self.mean_label[no_entry] = np.nan
+            self.mean_label /= counted
             self.__get_bin_for_merge__ = self.__get_most_similar_neighbor__
-            merge_opts['mean_label'] = mean_label
-            bookkept_arrays.append(merge_opts['mean_label'])
         elif mode == 'lowest':
             self.__get_bin_for_merge__ = self.__get_lowest_neighbor__
         elif mode == 'closest':
@@ -147,19 +144,16 @@ class ClassicBinning(Discretization):
                 min_indices = np.where(counted == min_val)[0]
                 min_idx = self.random_state.choice(min_indices)
                 neighbors = self.__get_neighbors__(min_idx)
-                partner_bin = self.__get_bin_for_merge__(bin_a=min_idx,
-                                                         neighbors=neighbors,
-                                                         counted=counted,
-                                                         **merge_opts)
-                kept_i_label, removed_i_label = self.__merge_bins__(
-                    min_idx,
-                    partner_bin)
-                counted[kept_i_label] += counted[removed_i_label]
+                i_label_keep, i_label_remove = self.__get_bin_for_merge__(
+                    bin_a=min_idx,
+                    neighbors=neighbors,
+                    counted=counted,
+                    **kwargs)
+                self.__merge_bins__( i_label_keep, i_label_remove)
+                counted[i_label_keep] += counted[i_label_remove]
                 mask = np.ones_like(counted, dtype=bool)
-                mask[removed_i_label] = False
-                for i in range(len(bookkept_arrays)):
-                    bookkept_arrays[i] = bookkept_arrays[i][mask]
-                counted = bookkept_arrays[0]
+                mask[i_label_remove] = False
+                counted = counted[mask]
                 n_merg_iterations += 1
                 self.n_bins -= 1
                 if np.sum(counted) != original_sum:
@@ -228,28 +222,23 @@ class ClassicBinning(Discretization):
         assert i_label not in neighbors
         return list(neighbors)
 
-    def __merge_bins__(self, i_label_a, i_label_b):
-        t_labels_a = self.i_to_t[i_label_a]
-        if isinstance(t_labels_a, tuple):
-            t_labels_a = [t_labels_a]
+    def __merge_bins__(self, i_label_keep, i_label_remove):
+        if i_label_remove <= i_label_keep:
+            print(i_label_remove, i_label_keep)
+            raise RuntimeError
+        t_labels_remove = self.i_to_t[i_label_remove]
+        if isinstance(t_labels_remove, tuple):
+            t_labels_remove = [t_labels_remove]
 
-        t_labels_b = self.i_to_t[i_label_b]
-        if isinstance(t_labels_b, tuple):
-            t_labels_b = [t_labels_b]
+        t_labels_keep = self.i_to_t[i_label_keep]
+        if isinstance(t_labels_keep, tuple):
+            t_labels_keep = [t_labels_keep]
 
-        if i_label_a > i_label_b:
-            removed_i_label = i_label_a
-            kept_i_label = i_label_b
-            for t_label_a_i in t_labels_a:
-                self.t_to_i[t_label_a_i] = i_label_b
-        else:
-            removed_i_label = i_label_b
-            kept_i_label = i_label_a
-            for t_label_b_i in t_labels_b:
-                self.t_to_i[t_label_b_i] = i_label_a
+        for t_label_remove in t_labels_remove:
+            self.t_to_i[t_label_remove] = i_label_keep
 
         for t_label in self.t_to_i.keys():
-            if self.t_to_i[t_label] > removed_i_label:
+            if self.t_to_i[t_label] > i_label_remove:
                 self.t_to_i[t_label] -= 1
         self.i_to_t = {}
         for t_label, i_label in self.t_to_i.items():
@@ -259,59 +248,85 @@ class ClassicBinning(Discretization):
             except KeyError:
                 t_labels = [t_label]
             self.i_to_t[i_label] = t_labels
-        return kept_i_label, removed_i_label
+        return i_label_keep, i_label_remove
 
     def __get_lowest_neighbor__(self, bin_a, neighbors, counted):
         counted_neighbors = counted[neighbors]
         min_val = np.where(counted_neighbors == np.min(counted_neighbors))[0]
-        min_index = np.random.choice(min_val)
-        return neighbors[min_index]
+        min_index = self.random_state.choice(min_val)
+        bin_b = neighbors[min_index]
+        if bin_b < bin_a:
+            i_label_keep = bin_b
+            i_label_remove = bin_a
+        else:
+            i_label_keep = bin_a
+            i_label_remove = bin_b
+        return i_label_keep, i_label_remove
 
     def __get_most_similar_neighbor__(self,
                                       bin_a,
                                       neighbors,
-                                      counted,
-                                      mean_label):
+                                      counted):
+        mean_label = self.mean_label
         counted_neighbors = counted[neighbors]
         min_counted = np.min(counted_neighbors)
         if min_counted == 0 or counted[bin_a] == 0:
-            bin_b = self.__get_closest_neighbor__(bin_a, neighbors, counted)
-            if bin_a > bin_b:
-                remove_idx = bin_a
-            else:
-                remove_idx = bin_b
-
+            i_label_keep, i_label_remove = self.__get_closest_neighbor__(
+                bin_a,
+                neighbors,
+                counted)
         else:
             label_diff = np.absolute(mean_label[neighbors] - mean_label[bin_a])
-            min_index = np.argmin(label_diff)
-            bin_b = neighbors[min_index]
-            s_a = counted[bin_a] * mean_label[bin_a]
-            s_b = counted[bin_b] * mean_label[bin_b]
-            s = s_a + s_b
-            if bin_a > bin_b:
-                mean_label[bin_b] = s / (counted[bin_a] + counted[bin_b])
-                remove_idx = bin_a
+            min_idx = np.where(label_diff == np.min(label_diff))[0]
+            if len(min_idx) > 0:
+                neighbors = [neighbors[i] for i in min_idx]
+                i_label_keep, i_label_remove = self.__get_closest_neighbor__(
+                    bin_a,
+                    neighbors,
+                    counted)
             else:
-                mean_label[bin_a] = s / (counted[bin_a] + counted[bin_b])
-                remove_idx = bin_b
+                bin_b = neighbors[min_idx]
+                if bin_b < bin_a:
+                    i_label_keep = bin_b
+                    i_label_remove = bin_a
+                else:
+                    i_label_keep = bin_a
+                    i_label_remove = bin_b
 
-
+            s_k = counted[i_label_keep] * mean_label[i_label_keep]
+            s_r = counted[i_label_remove] * mean_label[i_label_remove]
+            s = s_r + s_k
+            c = (counted[i_label_keep] + counted[i_label_remove])
+            mean_label[i_label_keep] = s / c
         mask = np.ones_like(mean_label, dtype=bool)
-        mask[remove_idx:] = False
+        mask[i_label_remove] = False
+        self.mean_label = self.mean_label[mask]
+        return i_label_keep, i_label_remove
 
-
-        mean_label = mean_label[mask]
-        return bin_b
-
-    def __get_closest_neighbor__(self, bin_a, neighbors, counted):
-        bin_cog = self.__calc_bin_cog__(bin_a)
-        bin_cogs = [self.__calc_bin_cog__(i)
-                    for i in neighbors]
+    def __get_closest_neighbor__(self,
+                                 bin_a,
+                                 neighbors,
+                                 counted,
+                                 unitless=True):
+        if unitless:
+            bin_cog = self.__calc_bin_cog_unitless__(bin_a)
+            bin_cogs = [self.__calc_bin_cog_unitless__(i)
+                        for i in neighbors]
+        else:
+            bin_cog = self.__calc_bin_cog__(bin_a)
+            bin_cogs = [self.__calc_bin_cog__(i)
+                        for i in neighbors]
         distance = [np.sqrt(np.sum((bin_cog - bin_i)**2))
                     for bin_i in bin_cogs]
         min_val = np.where(distance == np.min(distance))[0]
-        min_index = np.random.choice(min_val)
-        return neighbors[min_index]
+        bin_b = neighbors[self.random_state.choice(min_val)]
+        if bin_b < bin_a:
+            i_label_keep = bin_b
+            i_label_remove = bin_a
+        else:
+            i_label_keep = bin_a
+            i_label_remove = bin_b
+        return i_label_keep, i_label_remove
 
     def __calc_bin_cog__(self, i_label):
         t_labels = self.i_to_t[i_label]
@@ -339,4 +354,11 @@ class ClassicBinning(Discretization):
                 cog[i, j] = (upper_edge + lower_edge) / 2.
         return np.mean(cog, axis=1)
 
-
+    def __calc_bin_cog_unitless__(self, i_label):
+        t_labels = self.i_to_t[i_label]
+        if isinstance(t_labels, tuple):
+            t_labels = [t_labels]
+        cog = np.zeros((self.n_dims, len(t_labels)))
+        for j, t_label in enumerate(t_labels):
+            cog[:, j] = np.array(t_label)
+        return np.mean(cog, axis=1)
