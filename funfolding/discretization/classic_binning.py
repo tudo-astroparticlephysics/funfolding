@@ -4,7 +4,6 @@ from .discretization import Discretization
 
 import itertools
 import numpy as np
-from scipy.stats import itemfreq
 
 import copy
 
@@ -113,10 +112,10 @@ class ClassicBinning(Discretization):
             raise ValueError("Either 'min_samples' or 'max_bins' have "
                              "to be set!")
         elif min_samples is None:
-            min_samples = max(counted)
+            min_samples = original_sum
         elif max_bins is None:
-            max_bins = self.n_bins
-
+            max_bins = 1
+        bookkept_arrays = [counted]
         if mode == 'similar':
             if y is None:
                 raise ValueError("For mode 'similar' labels are needed!")
@@ -132,6 +131,7 @@ class ClassicBinning(Discretization):
             mean_label /= counted
             self.__get_bin_for_merge__ = self.__get_most_similar_neighbor__
             merge_opts['mean_label'] = mean_label
+            bookkept_arrays.append(merge_opts['mean_label'])
         elif mode == 'lowest':
             self.__get_bin_for_merge__ = self.__get_lowest_neighbor__
         elif mode == 'closest':
@@ -143,8 +143,7 @@ class ClassicBinning(Discretization):
             min_val = np.min(counted)
             try:
                 assert min_val <= min_samples
-                n_bins = len(self.i_to_t.keys())
-                assert n_bins > 1 and n_bins <= max_bins
+                assert self.n_bins > max_bins
                 min_indices = np.where(counted == min_val)[0]
                 min_idx = self.random_state.choice(min_indices)
                 neighbors = self.__get_neighbors__(min_idx)
@@ -158,7 +157,9 @@ class ClassicBinning(Discretization):
                 counted[kept_i_label] += counted[removed_i_label]
                 mask = np.ones_like(counted, dtype=bool)
                 mask[removed_i_label] = False
-                counted = counted[mask]
+                for i in range(len(bookkept_arrays)):
+                    bookkept_arrays[i] = bookkept_arrays[i][mask]
+                counted = bookkept_arrays[0]
                 n_merg_iterations += 1
                 self.n_bins -= 1
                 if np.sum(counted) != original_sum:
@@ -194,6 +195,71 @@ class ClassicBinning(Discretization):
                                right=right,
                                mode=mode,
                                inplace=True)
+
+    def __get_neighbors__(self, i_label):
+        t_labels = self.i_to_t[i_label]
+        if isinstance(t_labels, tuple):
+            t_labels = [t_labels]
+        neighbors = set()
+        for t_label in t_labels:
+            dims = range(self.n_dims)
+            for i in dims:
+                upper = []
+                lower = []
+                for j in dims:
+                    if j == i:
+                        upper.append(t_label[j] + 1)
+                        lower.append(t_label[j] - 1)
+                    else:
+                        upper.append(t_label[j])
+                        lower.append(t_label[j])
+                upper = tuple(upper)
+                lower = tuple(lower)
+                try:
+                    if upper not in t_labels:
+                        neighbors.add(self.t_to_i[upper])
+                except KeyError:
+                    pass
+                try:
+                    if lower not in t_labels:
+                        neighbors.add(self.t_to_i[lower])
+                except KeyError:
+                    pass
+        assert i_label not in neighbors
+        return list(neighbors)
+
+    def __merge_bins__(self, i_label_a, i_label_b):
+        t_labels_a = self.i_to_t[i_label_a]
+        if isinstance(t_labels_a, tuple):
+            t_labels_a = [t_labels_a]
+
+        t_labels_b = self.i_to_t[i_label_b]
+        if isinstance(t_labels_b, tuple):
+            t_labels_b = [t_labels_b]
+
+        if i_label_a > i_label_b:
+            removed_i_label = i_label_a
+            kept_i_label = i_label_b
+            for t_label_a_i in t_labels_a:
+                self.t_to_i[t_label_a_i] = i_label_b
+        else:
+            removed_i_label = i_label_b
+            kept_i_label = i_label_a
+            for t_label_b_i in t_labels_b:
+                self.t_to_i[t_label_b_i] = i_label_a
+
+        for t_label in self.t_to_i.keys():
+            if self.t_to_i[t_label] > removed_i_label:
+                self.t_to_i[t_label] -= 1
+        self.i_to_t = {}
+        for t_label, i_label in self.t_to_i.items():
+            try:
+                t_labels = self.i_to_t[i_label]
+                t_labels.append(t_label)
+            except KeyError:
+                t_labels = [t_label]
+            self.i_to_t[i_label] = t_labels
+        return kept_i_label, removed_i_label
 
     def __get_lowest_neighbor__(self, bin_a, neighbors, counted):
         counted_neighbors = counted[neighbors]
@@ -273,64 +339,4 @@ class ClassicBinning(Discretization):
                 cog[i, j] = (upper_edge + lower_edge) / 2.
         return np.mean(cog, axis=1)
 
-    def __get_neighbors__(self, i_label):
-        t_labels = self.i_to_t[i_label]
-        if isinstance(t_labels, tuple):
-            t_labels = [t_labels]
-        neighbors = []
-        for t_label in t_labels:
-            dims = range(self.n_dims)
-            for i in dims:
-                upper = []
-                lower = []
-                for j in dims:
-                    if j == i:
-                        upper.append(t_label[j] + 1)
-                        lower.append(t_label[j] - 1)
-                    else:
-                        upper.append(t_label[j])
-                        lower.append(t_label[j])
-                upper = tuple(upper)
-                lower = tuple(lower)
-                if (upper not in neighbors) and (upper not in t_labels):
-                    neighbors.append(upper)
-                if (lower not in neighbors) and (lower not in t_labels):
-                    neighbors.append(lower)
-        i_labels = [self.t_to_i.get(t)
-                    for t in neighbors
-                    if t in self.t_to_i.keys()]
-        assert i_label not in i_labels
-        return i_labels
 
-    def __merge_bins__(self, i_label_a, i_label_b):
-        t_labels_a = self.i_to_t[i_label_a]
-        if isinstance(t_labels_a, tuple):
-            t_labels_a = [t_labels_a]
-
-        t_labels_b = self.i_to_t[i_label_b]
-        if isinstance(t_labels_b, tuple):
-            t_labels_b = [t_labels_b]
-
-        if i_label_a > i_label_b:
-            removed_i_label = i_label_a
-            kept_i_label = i_label_b
-            for t_label_a_i in t_labels_a:
-                self.t_to_i[t_label_a_i] = i_label_b
-        else:
-            removed_i_label = i_label_b
-            kept_i_label = i_label_a
-            for t_label_b_i in t_labels_b:
-                self.t_to_i[t_label_b_i] = i_label_a
-
-        for t_label in self.t_to_i.keys():
-            if self.t_to_i[t_label] > removed_i_label:
-                self.t_to_i[t_label] -= 1
-        self.i_to_t = {}
-        for t_label, i_label in self.t_to_i.items():
-            try:
-                t_labels = self.i_to_t[i_label]
-                t_labels.append(t_label)
-            except KeyError:
-                t_labels = [t_label]
-            self.i_to_t[i_label] = t_labels
-        return kept_i_label, removed_i_label

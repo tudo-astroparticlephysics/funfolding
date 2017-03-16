@@ -11,7 +11,7 @@ if __name__ == '__main__':
         format='%(processName)-10s %(name)s %(levelname)-8s %(message)s',
         level=logging.INFO)
 
-    X = np.random.normal(-5, 5, size=20000)
+    X = np.random.normal(size=20000)
     X = X.reshape((10000, 2))
 
     y_mean = 1.5
@@ -44,7 +44,6 @@ if __name__ == '__main__':
                                     max_bins=None,
                                     mode='closest')
     binned = closest.histogram(X)
-    print(min(binned))
     fig, ax = plt.subplots()
     discretization.visualize_classic_binning(ax,
                                              closest,
@@ -58,7 +57,6 @@ if __name__ == '__main__':
                                    max_bins=None,
                                    mode='lowest')
     binned = lowest.histogram(X)
-    print(min(binned))
     fig, ax = plt.subplots()
     discretization.visualize_classic_binning(ax,
                                              lowest,
@@ -76,7 +74,6 @@ if __name__ == '__main__':
                                         mode='similar',
                                         y=y_clf)
     binned = similar_clf.histogram(X)
-    print(min(binned))
     discretization.visualize_classic_binning(ax[0],
                                              similar_clf,
                                              X,
@@ -101,7 +98,6 @@ if __name__ == '__main__':
                                     mode='similar',
                                     y=y_reg)
     binned = similar_reg.histogram(X)
-    print(min(binned))
     discretization.visualize_classic_binning(ax[0],
                                              similar_reg,
                                              X,

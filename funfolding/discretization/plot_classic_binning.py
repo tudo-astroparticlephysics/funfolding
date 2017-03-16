@@ -6,6 +6,8 @@ import matplotlib
 import matplotlib.colors as colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from collections import Counter
+
 
 def visualize_classic_binning(ax,
                               binning,
@@ -21,7 +23,6 @@ def visualize_classic_binning(ax,
     counted = binning.histogram(X, sample_weight=sample_weight)
     cmap = matplotlib.cm.get_cmap(cmap)
     c_max = np.max(counted)
-    c_max = 40
     if log_c:
         norm = colors.LogNorm(vmin=0, vmax=c_max)
     else:
@@ -32,56 +33,60 @@ def visualize_classic_binning(ax,
     for i_label, t_labels in binning.i_to_t.items():
         if isinstance(t_labels, tuple):
             t_labels = [t_labels]
-        visible_edges = set()
-        invis_edges = set()
+        edges = []
         for t_label in t_labels:
             fill_bin = True
-            try:
-                var_1_h = binning.edges[0][t_label[0]]
-            except IndexError:
+
+            idx = t_label[0]
+            if idx < 0 or idx >= len(binning.edges[0]):
                 var_1_h = None
                 fill_bin = False
-            try:
-                var_1_l = binning.edges[0][t_label[0] - 1]
-            except IndexError:
+            else:
+                var_1_h = binning.edges[0][idx]
+
+            idx = t_label[0] - 1
+            if idx < 0 or idx >= len(binning.edges[0]):
                 var_1_l = None
                 fill_bin = False
-            try:
-                var_2_h = binning.edges[1][t_label[1]]
-            except IndexError:
+            else:
+                var_1_l = binning.edges[0][idx]
+
+            idx = t_label[1]
+            if idx < 0 or idx >= len(binning.edges[1]):
                 var_2_h = None
                 fill_bin = False
-            try:
-                var_2_l = binning.edges[1][t_label[1] - 1]
-            except IndexError:
+            else:
+                var_2_h = binning.edges[1][idx]
+
+            idx = t_label[1] - 1
+            if idx < 0 or idx >= len(binning.edges[0]):
                 var_2_l = None
                 fill_bin = False
+            else:
+                var_2_l = binning.edges[1][idx]
             temp_edges = [(var_1_h, var_1_h, var_2_l, var_2_h),
                           (var_1_l, var_1_l, var_2_l, var_2_h),
                           (var_1_l, var_1_h, var_2_l, var_2_l),
                           (var_1_l, var_1_h, var_2_h, var_2_h)]
             for edge in temp_edges:
                 if all([e_i is not None for e_i in edge]):
-                    if edge not in visible_edges:
-                        if edge not in invis_edges:
-                            visible_edges.add(edge)
-                    else:
-                        visible_edges.remove(edge)
-                        invis_edges.add(edge)
+                    edges.append(edge)
+
             if fill_bin:
                 ax.fill([var_1_l, var_1_l, var_1_h, var_1_h],
                         [var_2_l, var_2_h, var_2_h, var_2_l],
                         color=colz[i_label],
                         zorder=zorder)
-        for e in visible_edges:
-            if e not in plotted_edges:
-                ax.plot(e[:2], e[2:],
-                        lw=linewidth,
-                        color=linecolor,
-                        ls='-',
-                        zorder=zorder)
+        edges_dict = Counter(edges)
+        for e, freq in edges_dict.items():
+            if freq == 1:
+                if e not in plotted_edges:
+                    ax.plot(e[:2], e[2:],
+                            lw=linewidth,
+                            color=linecolor,
+                            ls='-',
+                            zorder=zorder)
                 plotted_edges.add(e)
-    #cbar = matplotlib.cm.ScalarMappable(norm=norm, cmap=cmap)
     ax.set_xlim(binning.edges[0][0], binning.edges[0][-1])
     ax.set_ylim(binning.edges[1][0], binning.edges[1][-1])
     divider = make_axes_locatable(ax)
@@ -89,3 +94,50 @@ def visualize_classic_binning(ax,
     matplotlib.colorbar.ColorbarBase(cax,
                                      cmap=cmap,
                                      norm=norm)
+
+def mark_bin(ax, binning, i_label, color='r', linewidth=1., zorder=6):
+    t_labels = binning.i_to_t[i_label]
+    if isinstance(t_labels, tuple):
+        t_labels = [t_labels]
+    edges = []
+
+    for t_label in t_labels:
+        idx = t_label[0]
+        if idx < 0 or idx >= len(binning.edges[0]):
+            var_1_h = None
+        else:
+            var_1_h = binning.edges[0][idx]
+
+        idx = t_label[0] - 1
+        if idx < 0 or idx >= len(binning.edges[0]):
+            var_1_l = None
+        else:
+            var_1_l = binning.edges[0][idx]
+
+        idx = t_label[1]
+        if idx < 0 or idx >= len(binning.edges[1]):
+            var_2_h = None
+        else:
+            var_2_h = binning.edges[1][idx]
+
+        idx = t_label[1] - 1
+        if idx < 0 or idx >= len(binning.edges[0]):
+            var_2_l = None
+        else:
+            var_2_l = binning.edges[1][idx]
+        temp_edges = [(var_1_h, var_1_h, var_2_l, var_2_h),
+                      (var_1_l, var_1_l, var_2_l, var_2_h),
+                      (var_1_l, var_1_h, var_2_l, var_2_l),
+                      (var_1_l, var_1_h, var_2_h, var_2_h)]
+        for edge in temp_edges:
+            if all([e_i is not None for e_i in edge]):
+                edges.append(edge)
+    edges_dict = Counter(edges)
+    for e, freq in edges_dict.items():
+        if freq == 1:
+            ax.plot(e[:2], e[2:],
+                    lw=linewidth,
+                    color=color,
+                    ls='-',
+                    zorder=zorder)
+
