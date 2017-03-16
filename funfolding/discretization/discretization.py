@@ -4,7 +4,7 @@ import numpy as np
 
 
 class Discretization:
-    name = 'BaseClassDiscretization'
+    name = 'Discretization'
 
     def __init__(self):
         self.logger = logging.getLogger(self.name)
