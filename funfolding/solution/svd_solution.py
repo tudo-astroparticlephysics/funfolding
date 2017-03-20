@@ -6,8 +6,14 @@ from ..model import LinearModel
 
 class SVDSolution(Solution):
     name = 'SVDSolution'
+    def __init__(self):
+        super(SVDSolution, self).__init__()
+        self.original_singular_values = None
+        self.used_singular_values = None
 
-    def run(self, vec_g, model, keep_n_sig_values):
+
+    def run(self, vec_g, model, keep_n_sig_values=np.inf):
+        self.initialize()
         super(SVDSolution, self).run()
         if not isinstance(model, LinearModel):
             raise ValueError("'model' has to be of type LinearModel!")

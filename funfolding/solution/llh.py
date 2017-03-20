@@ -14,9 +14,9 @@ def create_C_thikonov(n_dims):
         C[i, i] = -2.
         C[i, i-1] = 1
         C[i, i+1] = 1
-    C[idx, idx] = -1
-    C[idx, idx-1] = 1
-    return C**2
+    C[idx_N, idx_N] = -1
+    C[idx_N, idx_N-1] = 1
+    return np.dot(C.T, C)
 
 
 class LLHThikonov:
@@ -50,7 +50,7 @@ class LLHThikonov:
         part_b = np.dot(g_est, self.linear_model.A)
         part_b /= g_est
         h_unreg -= part_b
-        reg_part = np.ones_like(h) * self.tau * np.dot(self.C, f)
+        reg_part = np.ones_like(h_unreg) * self.tau * np.dot(self.C, f)
         return h_unreg + reg_part
 
     def __generate_hesse_matrix__(self, f, g_est):
@@ -74,7 +74,7 @@ class LLHSolutionMinimizer(Solution):
                             x_0=f_0)
 
 
-class LLHSolutionBlobel(Solution);
+class LLHSolutionGradientDescent(Solution):
     name = 'LLHSolutionBlobel'
     def run(self, vec_g, model, tau, f_0):
         super(LLHSolutionBlobel, self).run()
