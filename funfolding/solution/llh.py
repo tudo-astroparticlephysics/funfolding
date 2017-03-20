@@ -45,6 +45,19 @@ class LLHThikonov:
         neg_log_LLH = regularization_part - poisson_part
         return neg_log_LLH
 
+    def __generate_gradient__(self, f, g_est):
+        h_unreg = np.sum(self.linear_model.A, axis=1)
+        part_b = np.dot(g_est, self.linear_model.A)
+        part_b /= g_est
+        h_unreg -= part_b
+        reg_part = np.ones_like(h) * self.tau * np.dot(self.C, f)
+        return h_unreg + reg_part
+
+    def __generate_hesse_matrix__(self, f, g_est):
+        H_unreg = np.dot(g_est,
+                         np.dot(self.linear_model.A.T, self.linear_model.A))
+        H_unreg /= g_est**2
+        return H_unreg + self.tau * self.C
 
 
 
@@ -61,6 +74,14 @@ class LLHSolutionMinimizer(Solution):
                             x_0=f_0)
 
 
+class LLHSolutionBlobel(Solution);
+    name = 'LLHSolutionBlobel'
+    def run(self, vec_g, model, tau, f_0):
+        super(LLHSolutionBlobel, self).run()
+        LLH = LLHThikonov()
+        LLH.initialize(g=vec_g, model=model, tau=tau)
+        solution = minimize(fun=LLH.evaluate,
+                            x_0=f_0)
 
 
 
