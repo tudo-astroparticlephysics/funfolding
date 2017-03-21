@@ -29,12 +29,12 @@ class LLHThikonov:
         self.status = -1
 
     def initialize(self, g, linear_model, tau):
-        if not isinstance(lin_model, LinearModel):
+        if not isinstance(linear_model, LinearModel):
             raise ValueError("'model' has to be of type LinearModel!")
         self.linear_model = linear_model
         self.n_dims_f = linear_model.A.shape[1]
         self.g = g
-        self.C = create_second_derivative_matrix(self.n_dims_f)
+        self.C = create_C_thikonov(self.n_dims_f)
         self.tau = tau
         self.status = 0
 
