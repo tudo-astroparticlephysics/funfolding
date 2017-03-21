@@ -26,36 +26,35 @@ class BasicLinearModel(LinearModel):
     name = 'BasicLinearModel'
     def __init__(self):
         super(BasicLinearModel, self).__init__()
-        self.range_x = None
-        self.range_y = None
+        self.range_g = None
+        self.range_f = None
 
     def __generate_binning__(self):
         binnings = []
-        for r in [self.range_x, self.range_y]:
+        for r in [self.range_g, self.range_f]:
             low = r[0]
             high = r[-1]
             binnings.append(np.linspace(low, high + 1, high - low + 2))
         return binnings[0], binnings[1]
 
-    def generate_vectors(self, X=None, y=None):
-        binning_x, binning_y = self.__generate_binning__()
-        if X is not None:
-            vec_X = np.histogram(X, bins=binning_x)[0]
+    def generate_vectors(self, g=None, f=None):
+        binning_g, binning_f = self.__generate_binning__()
+        if g is not None:
+            vec_g = np.histogram(g, bins=binning_g)[0]
         else:
-            vec_X = None
-
-        if y is not None:
-            vec_y = np.histogram(y, bins=binning_y)[0]
+            vec_g = None
+        if f is not None:
+            vec_f = np.histogram(f, bins=binning_f)[0]
         else:
-            vec_y = None
-        return vec_X, vec_y
+            vec_f = None
+        return vec_g, vec_f
 
-    def initialize(self, X, y, sample_weight=None):
+    def initialize(self, g, f, sample_weight=None):
         super(BasicLinearModel, self).initialize()
-        self.range_x = (min(X), max(X))
-        self.range_y = (min(y), max(y))
-        binning_x, binning_y = self.__generate_binning__()
+        self.range_g = (min(g), max(g))
+        self.range_f = (min(f), max(f))
+        binning_g, binning_f = self.__generate_binning__()
 
-        self.A = np.histogram2d(x=y, y=X, bins=(binning_y, binning_x))[0]
-        M_norm = np.diag(1 / np.sum(self.A, axis=0))
-        self.A = np.dot(self.A, M_norm)
+        self.A = np.histogram2d(x=g, y=f, bins=(binning_g, binning_f))[0]
+        M_norm = np.diag(1 / np.sum(self.A, axis=1))
+        self.A = np.dot(M_norm, self.A)

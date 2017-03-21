@@ -27,7 +27,7 @@ class SVDSolution(Solution):
         for i in order[:n_sig_values]:
             S_inv[i, i] = 1. / np.real(S_values[i])
         A_inv = np.dot(V.T, np.dot(S_inv, U.T))
-        vec_f = np.dot(A_inv, vec_g)
+        vec_f = np.dot(vec_g, A_inv.T)
         vec_f = np.real(vec_f)
         V_y = np.diag(vec_g)
         V_f_est = np.real(np.dot(A_inv, np.dot(V_y, A_inv.T)))
