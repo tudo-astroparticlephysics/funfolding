@@ -1,5 +1,6 @@
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, differential_evolution
+from scipy import linalg
 
 from .solution import Solution
 from ..model import LinearModel
@@ -50,6 +51,9 @@ class LLHThikonov:
                                 np.diag(self.g / g_est**2)),
                          self.linear_model.A)
         return self.tau * self.C + H_unreg
+
+    def __call__(self, f):
+        return self.evaluate_neg_log_llh(f)
 
 
 class LLHThikonovForLoops:
@@ -127,11 +131,34 @@ class LLHSolutionMinimizer(Solution):
             x0 = model.generate_x0(vec_g)
         x0 = model.set_x0(x0)
         LLH = LLHThikonov(g=vec_g, linear_model=model, tau=tau)
+        cons = ({'type': 'eq', 'fun': lambda x: np.absolute(np.sum(x) -
+                                                            np.sum(x0))})
         solution = minimize(fun=LLH.evaluate_neg_log_llh,
                             x0=x0,
                             bounds=bounds,
-                            #  method='dogleg',
-                            #  jac=LLH.evaluate_gradient,
+                            method='SLSQP',
+                            # jac=LLH.evaluate_gradient,
                             #  hess=LLH.evaluate_hesse_matrix
-                            )
-        return solution
+                            constraints=cons)
+        hess_matrix = LLH.evaluate_hesse_matrix(solution.x)
+        V_f_est = linalg.inv(hess_matrix)
+        return solution.x, V_f_est
+
+
+class LLHSolutionDifferentialEvolution(Solution):
+    name = 'LLHSolutionMinimizer'
+
+    def run(self, vec_g, model, tau, x0=None, bounds=None):
+        self.initialize()
+        super(LLHSolutionDifferentialEvolution, self).run()
+        if bounds is True:
+            bounds = model.generate_bounds(vec_g)
+        if x0 is None:
+            x0 = model.generate_x0(vec_g)
+        x0 = model.set_x0(x0)
+        LLH = LLHThikonov(g=vec_g, linear_model=model, tau=tau)
+        solution = differential_evolution(func=LLH.evaluate_neg_log_llh,
+                                          bounds=bounds)
+        hess_matrix = LLH.evaluate_hesse_matrix(solution.x)
+        V_f_est = linalg.inv(hess_matrix)
+        return solution.x, V_f_est

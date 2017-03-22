@@ -5,9 +5,6 @@ from matplotlib import pyplot as plt
 
 import funfolding as ff
 
-from scipy import integrate
-from scipy.stats import norm
-from scipy import linalg
 from scipy.special import lambertw
 
 seed = 1337
@@ -55,6 +52,9 @@ if __name__ == '__main__':
     plt.xlabel('Sought-after Value')
     plt.ylabel('Measured Value')
     plt.savefig('02_x_y_smearing.png')
+    print('\nScatter Plot of Sought-after vs. Measured Values saved as: '
+          '02_x_y_smearing.png')
+
     binning_f = np.linspace(0, 20, 11)
     binning_g = np.linspace(min(unbinned_g) - 1e-3, max(unbinned_g) + 1e-3, 31)
     binned_g = np.digitize(unbinned_g, binning_g)
@@ -66,10 +66,7 @@ if __name__ == '__main__':
     plt.clf()
     plt.imshow(model.A)
     plt.savefig('02_matrix_A.png')
-
-    model_const_N = ff.model.LinearModelConstantN()
-    model_const_N.initialize(g=binned_g,
-                             f=binned_f)
+    print('\nNormalized Matrix saved as: 02_matrix_A.png')
 
     unbinned_f, f = create_xexpax_sample(
         n_events_test,
@@ -82,21 +79,39 @@ if __name__ == '__main__':
 
     vec_g, vec_f = model.generate_vectors(binned_g, binned_f)
     svd = ff.solution.SVDSolution()
-    for i in range(1, 12):
-        print('svd {} sig_vals:'.format(i))
-        print(list(svd.run(vec_g, model, i)[0] / vec_f))
+    print('\n===========================\nResults for each Bin: Unfolded/True')
 
-    vec_g, vec_f_0, N = model_const_N.generate_vectors(binned_g, binned_f)
+    print('\nSVD Solution for diffrent number of kept sigular values:')
+    for i in range(1, 11):
+        vec_f_est, V_f_est = svd.run(vec_g=vec_g,
+                                     model=model,
+                                     keep_n_sig_values=i)
+        str_0 = '{} singular values:'.format(str(i).zfill(2))
+        str_1 = ''
+        for f_i_est, f_i in zip(vec_f_est, vec_f):
+            str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
+        print('{}\t{}'.format(str_0, str_1))
 
+    print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     llh_sol = ff.solution.LLHSolutionMinimizer()
-    solution = llh_sol.run(vec_g=vec_g,
-                           model=model,
-                           tau=0,
-                           bounds=True)
+    vec_f_est, V_f_est = llh_sol.run(vec_g=vec_g,
+                                     model=model,
+                                     tau=0,
+                                     bounds=True)
+    str_0 = 'unregularized:'
+    str_1 = ''
+    for f_i_est, f_i in zip(vec_f_est, vec_f):
+        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
+    print('{}\t{}'.format(str_0, str_1))
 
-    print(solution)
-    solution = llh_sol.run(vec_g=vec_g,
-                           model=model_const_N,
-                           tau=0,
-                           bounds=True)
-    print(solution)
+    print('\nDifferential Evolution Solution:')
+    llh_sol = ff.solution.LLHSolutionDifferentialEvolution()
+    vec_f_est, V_f_est = llh_sol.run(vec_g=vec_g,
+                                     model=model,
+                                     tau=0,
+                                     bounds=True)
+    str_0 = 'unregularized:'
+    str_1 = ''
+    for f_i_est, f_i in zip(vec_f_est, vec_f):
+        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
+    print('{}\t{}'.format(str_0, str_1))
