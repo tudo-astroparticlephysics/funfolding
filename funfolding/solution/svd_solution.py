@@ -4,13 +4,14 @@ from scipy import linalg
 from .solution import Solution
 from ..model import LinearModel
 
+
 class SVDSolution(Solution):
     name = 'SVDSolution'
+
     def __init__(self):
         super(SVDSolution, self).__init__()
         self.original_singular_values = None
         self.used_singular_values = None
-
 
     def run(self, vec_g, model, keep_n_sig_values=np.inf):
         self.initialize()

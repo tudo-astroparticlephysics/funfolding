@@ -16,11 +16,16 @@ rnd = np.random.RandomState(seed)
 
 
 def create_xexpax_sample(n_events, a, x_min, x_max):
-    F = lambda x, N: -N * np.exp(-a * x) * (a * x + 1) / a**2
+    def F(x, N):
+        return -N * np.exp(-a * x) * (a * x + 1) / a**2
     N_x = 1 / (F(x_max, 1) - F(x_min, 1))
-    f = lambda x: x * np.exp(-a * x) * N_x
+
+    def f(x):
+        return x * np.exp(-a * x) * N_x
+
     def F_inv(u):
-        return -(1 + np.real(lambertw((-N_x + a**2 * u) / (np.e * N_x), k=-1))) / a
+        prod_log = np.real(lambertw((-N_x + a**2 * u) / (np.e * N_x), k=-1))
+        return -(1 + prod_log) / a
     u = rnd.uniform(size=n_events)
     return F_inv(u), f
 
@@ -29,13 +34,12 @@ def smear(unbinned_f, factor=10, exponent=2, scale=5):
     x_loc = unbinned_f + (unbinned_f / x_max * factor)**exponent
     return rnd.normal(loc=x_loc, scale=scale)
 
+
 if __name__ == '__main__':
 
     a = 0.2
     x_min = 0.
     x_max = 20.
-
-
 
     n_events_matrix = int(1e6)
     n_events_test = int(1e4)
@@ -76,4 +80,11 @@ if __name__ == '__main__':
     svd = ff.solution.SVDSolution()
     for i in range(1, 12):
         print('svd {} sig_vals:'.format(i))
-        print(list(svd.run(vec_g, model, i)[0]/vec_f))
+        print(list(svd.run(vec_g, model, i)[0] / vec_f))
+
+    llh_sol = ff.solution.LLHSolutionMinimizer()
+    f_0 = np.ones_like(vec_f) * len(binned_g) / len(vec_f)
+    print(f_0)
+    solution = llh_sol.run(vec_g=vec_g, model=model, tau=0, f_0=f_0)
+    print(solution)
+
