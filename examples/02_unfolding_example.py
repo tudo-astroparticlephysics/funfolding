@@ -67,6 +67,10 @@ if __name__ == '__main__':
     plt.imshow(model.A)
     plt.savefig('02_matrix_A.png')
 
+    model_const_N = ff.model.LinearModelConstantN()
+    model_const_N.initialize(g=binned_g,
+                             f=binned_f)
+
     unbinned_f, f = create_xexpax_sample(
         n_events_test,
         a,
@@ -82,9 +86,17 @@ if __name__ == '__main__':
         print('svd {} sig_vals:'.format(i))
         print(list(svd.run(vec_g, model, i)[0] / vec_f))
 
-    llh_sol = ff.solution.LLHSolutionMinimizer()
-    f_0 = np.ones_like(vec_f) * len(binned_g) / len(vec_f)
-    print(f_0)
-    solution = llh_sol.run(vec_g=vec_g, model=model, tau=0, f_0=f_0)
-    print(solution)
+    vec_g, vec_f_0, N = model_const_N.generate_vectors(binned_g, binned_f)
 
+    llh_sol = ff.solution.LLHSolutionMinimizer()
+    solution = llh_sol.run(vec_g=vec_g,
+                           model=model,
+                           tau=0,
+                           bounds=True)
+
+    print(solution)
+    solution = llh_sol.run(vec_g=vec_g,
+                           model=model_const_N,
+                           tau=0,
+                           bounds=True)
+    print(solution)

@@ -1,5 +1,6 @@
 import logging
 
+
 class Solution:
     name = 'Solution'
 
@@ -12,7 +13,7 @@ class Solution:
         self.logger.debug('Initilizing the Solution!')
         self.status = 0
 
-    def run(self, g=None, model=None):
+    def run(self, vec_g=None, model=None):
         self.logger.debug('Running Solution!')
         if self.status < 0:
             raise RuntimeError("Solution has to be intilized. "
