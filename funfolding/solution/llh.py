@@ -78,7 +78,7 @@ class LLHThikonovForLoops:
             for j in range(n):
                 reg_part += self.C[i, j] * f[i] * f[j]
         reg_part *= 0.5 * self.tau
-        return poisson_part + reg_part
+        return reg_part - poisson_part
 
     def evaluate_gradient(self, f):
         m, n = self.linear_model.A.shape
