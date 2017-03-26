@@ -38,6 +38,9 @@ if __name__ == '__main__':
     x_min = 0.
     x_max = 20.
 
+    exponent = 2
+    scale = 5
+
     n_events_matrix = int(1e6)
     n_events_test = int(1e4)
 
@@ -47,7 +50,7 @@ if __name__ == '__main__':
         x_min,
         x_max)
 
-    unbinned_g = smear(unbinned_f, exponent=1, scale=0.5)
+    unbinned_g = smear(unbinned_f, exponent=exponent, scale=scale)
     plt.hexbin(unbinned_g, unbinned_f, vmin=1)
     plt.xlabel('Sought-after Value')
     plt.ylabel('Measured Value')
@@ -56,7 +59,7 @@ if __name__ == '__main__':
           '02_x_y_smearing.png')
 
     binning_f = np.linspace(0, 20, 11)
-    binning_g = np.linspace(min(unbinned_g) - 1e-3, max(unbinned_g) + 1e-3, 31)
+    binning_g = np.linspace(min(unbinned_g) - 1e-3, max(unbinned_g) + 1e-3, 61)
     binned_g = np.digitize(unbinned_g, binning_g)
     binned_f = np.digitize(unbinned_f, binning_f)
 
@@ -73,11 +76,12 @@ if __name__ == '__main__':
         a,
         x_min,
         x_max)
-    unbinned_g = smear(unbinned_f, exponent=1, scale=0.5)
+    unbinned_g = smear(unbinned_f, exponent=exponent, scale=scale)
     binned_g = np.digitize(unbinned_g, binning_g)
     binned_f = np.digitize(unbinned_f, binning_f)
 
     vec_g, vec_f = model.generate_vectors(binned_g, binned_f)
+    print(vec_f)
     svd = ff.solution.SVDSolution()
     print('\n===========================\nResults for each Bin: Unfolded/True')
 
@@ -98,18 +102,7 @@ if __name__ == '__main__':
                                      model=model,
                                      tau=0,
                                      bounds=True)
-    str_0 = 'unregularized:'
-    str_1 = ''
-    for f_i_est, f_i in zip(vec_f_est, vec_f):
-        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
-    print('{}\t{}'.format(str_0, str_1))
-
-    print('\nDifferential Evolution Solution:')
-    llh_sol = ff.solution.LLHSolutionDifferentialEvolution()
-    vec_f_est, V_f_est = llh_sol.run(vec_g=vec_g,
-                                     model=model,
-                                     tau=0,
-                                     bounds=True)
+    print(vec_f_est)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est, vec_f):

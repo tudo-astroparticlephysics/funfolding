@@ -62,8 +62,8 @@ class BasicLinearModel(LinearModel):
         binning_g, binning_f = self.__generate_binning__()
 
         self.A = np.histogram2d(x=g, y=f, bins=(binning_g, binning_f))[0]
-        M_norm = np.diag(1 / np.sum(self.A, axis=1))
-        self.A = np.dot(M_norm, self.A)
+        M_norm = np.diag(1 / np.sum(self.A, axis=0))
+        self.A = np.dot(self.A, M_norm)
 
     def generate_x0(self, vec_g):
         n = self.A.shape[1]
