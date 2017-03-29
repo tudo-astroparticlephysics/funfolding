@@ -2,6 +2,8 @@ import numpy as np
 from scipy.optimize import minimize, differential_evolution
 from scipy import linalg
 
+import emcee
+
 from .solution import Solution
 from ..model import LinearModel
 
@@ -162,3 +164,32 @@ class LLHSolutionDifferentialEvolution(Solution):
         hess_matrix = LLH.evaluate_hesse_matrix(solution.x)
         V_f_est = linalg.inv(hess_matrix)
         return solution.x, V_f_est
+
+
+class LLHSolutionMCMC(Solution):
+    name = 'LLHSolutionMCMC'
+
+    def run(self, vec_g, model, tau, bounds=None, x0=None, n_walker=100):
+        self.initialize()
+        super(LLHSolutionMinimizer, self).run()
+        if bounds is True:
+            bounds = model.generate_bounds(vec_g)
+        if x0 is None:
+            x0 = model.generate_x0(vec_g)
+        x0 = model.set_x0(x0)
+        n_dims = len(x0)
+
+        LLH = LLHThikonov(g=vec_g, linear_model=model, tau=tau)
+
+        sampler = emcee.EnsembleSampler(n_walker,
+                                        n_dims,
+                                        LLH.evaluate_neg_log_llh)
+
+        pos = np.zeros((n_walker, n_dims), dtype=float)
+        for i, x0_i in enumerate(x0):
+            pos[:, i] = np.random.poisson(x0_i, size=n_walker)
+
+        sampler.run_mcmc(pos, 500)
+        samples = sampler.chain[:, 50:, :].reshape((-1, n_dims))
+
+        return samples
