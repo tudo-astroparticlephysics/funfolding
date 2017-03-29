@@ -3,6 +3,8 @@ import logging
 import numpy as np
 from matplotlib import pyplot as plt
 
+from IPython import embed
+
 import funfolding as ff
 
 from scipy.special import lambertw
@@ -107,9 +109,13 @@ if __name__ == '__main__':
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
 
-
-    print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
+    print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     llh_mcmc = ff.solution.LLHSolutionMCMC()
     llh_mcmc.initialize(vec_g=vec_g, model=model)
-    samples = llh_mcmc.run(tau=0)
-    print(samples.shape)
+    vec_f_est = llh_mcmc.run()
+    print(vec_f_est)
+    str_0 = 'unregularized:'
+    str_1 = ''
+    for f_i_est, f_i in zip(vec_f_est, vec_f):
+        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
+    print('{}\t{}'.format(str_0, str_1))

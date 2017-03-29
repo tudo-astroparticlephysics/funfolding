@@ -23,7 +23,7 @@ def create_C_thikonov(n_dims):
 
 
 class LLHThikonov:
-    def __init__(self, g, linear_model, tau=0., N_prior=False):
+    def __init__(self, g, linear_model, tau=0., N_prior=False, neg_llh=True):
         if not isinstance(linear_model, LinearModel):
             raise ValueError("'model' has to be of type LinearModel!")
         self.linear_model = linear_model
@@ -32,33 +32,39 @@ class LLHThikonov:
         self.C = create_C_thikonov(self.n_dims_f)
         self.tau = tau
         self.status = 0
+        self.neg_llh = neg_llh
 
-    def evaluate_llh(self, f, neg_llh=True):
+    def evaluate_llh(self, f):
         g_est, f = self.linear_model.evaluate(f)
+        if any(g_est < 0) or any(f < 0):
+            if self.neg_llh:
+                return np.inf
+            else:
+                return -np.inf
         poisson_part = np.sum(g_est - self.g * np.log(g_est))
         regularization_part = 0.5 * self.tau * np.dot(np.dot(f.T, self.C), f)
-        if neg_llh:
+        if self.neg_llh:
             return poisson_part + regularization_part
         else:
             return (poisson_part + regularization_part) * (-1)
 
-    def evaluate_gradient(self, f, neg_llh=True):
+    def evaluate_gradient(self, f):
         g_est, f = self.linear_model.evaluate(f)
         h_unreg = np.sum(self.linear_model.A, axis=0)
         part_b = np.sum(self.linear_model.A.T * self.g * (1 / g_est), axis=1)
         h_unreg -= part_b
         reg_part = np.ones_like(h_unreg) * self.tau * np.dot(self.C, f)
-        if neg_llh:
+        if self.neg_llh:
             return poisson_part + regularization_part
         else:
             return (poisson_part + regularization_part) * (-1)
 
-    def evaluate_hesse_matrix(self, f, neg_llh=True):
+    def evaluate_hesse_matrix(self, f):
         g_est, f = self.linear_model.evaluate(f)
         H_unreg = np.dot(np.dot(self.linear_model.A.T,
                                 np.diag(self.g / g_est**2)),
                          self.linear_model.A)
-        if neg_llh:
+        if self.neg_llh:
             return (self.tau * self.C) + H_unreg
         else:
             return ((self.tau * self.C) + H_unreg) * (-1)
@@ -178,18 +184,23 @@ class LLHSolutionMinimizer(Solution):
 
 class LLHSolutionMCMC(Solution):
     name = 'LLHSolutionMCMC'
-    def __init__(self, n_walker=100, n_used_steps=2000, n_burn_steps=1000):
-        super(LLHSolutionMCMC, self).__init__()
+    def __init__(self,
+                 n_walker=100,
+                 n_used_steps=2000,
+                 n_burn_steps=1000,
+                 random_state=None):
+        super(LLHSolutionMCMC, self).__init__(random_state=random_state)
         self.n_walker = n_walker
         self.n_used_steps = n_used_steps
         self.n_burn_steps = n_burn_steps
         self.llh = None
         self.vec_g = None
         self.model = None
+        self.n_dims_f = None
 
     def initialize(self, vec_g, model):
         super(LLHSolutionMCMC, self).initialize()
-        self.llh = LLHThikonov(g=vec_g, linear_model=model)
+        self.llh = LLHThikonov(g=vec_g, linear_model=model, neg_llh=False)
         self.n_dims_f = model.A.shape[1]
         self.vec_g = vec_g
         self.model = model
@@ -204,20 +215,27 @@ class LLHSolutionMCMC(Solution):
         n_steps = self.n_used_steps + self.n_burn_steps
         pos_x0 = np.zeros((self.n_walker, self.n_dims_f), dtype=float)
         for i, x0_i in enumerate(x0):
-            pos_x0[:, i] = np.random.poisson(x0_i, size=self.n_walker)
+            pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
         sampler = self.__initiallize_mcmc__()
-        samples = self.__run_mcmc__(sampler, pos_x0, n_steps)
-        return samples
+        vec_f = self.__run_mcmc__(sampler, pos_x0, n_steps)
+        return vec_f
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walker,
-                                             dim=self.n_dims_f,
-                                             lnpostfn=self.llh.evaluate_llh)
+                                     dim=self.n_dims_f,
+                                     lnpostfn=self.llh.evaluate_llh)
 
     def __run_mcmc__(self, sampler, x0, n_steps):
-        sampler.run_mcmc(x0, n_steps)
-        samples = sampler.chain[:, self.n_burn_steps:, :].reshape((-1, n_dims))
-        return samples
+        sampler.run_mcmc(pos0=x0,
+                         N=n_steps,
+                         rstate0=self.random_state)
+        samples = sampler.chain[:, self.n_burn_steps:, :]
+        samples = samples.reshape((-1, self.n_dims_f))
+
+        probs = sampler.lnprobability[:, self.n_burn_steps:]
+        probs = probs.reshape((-1))
+        idx_max = np.argmax(probs)
+        return samples[idx_max, :]
 
 
 class LLHSolutionHybrid(LLHSolutionMCMC, LLHSolutionMinimizer):
