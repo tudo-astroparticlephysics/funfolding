@@ -40,7 +40,7 @@ class LLHThikonov:
         if neg_llh:
             return poisson_part + regularization_part
         else:
-            return poisson_part - regularization_part
+            return (poisson_part + regularization_part) * (-1)
 
     def evaluate_gradient(self, f, neg_llh=True):
         g_est, f = self.linear_model.evaluate(f)
@@ -49,9 +49,9 @@ class LLHThikonov:
         h_unreg -= part_b
         reg_part = np.ones_like(h_unreg) * self.tau * np.dot(self.C, f)
         if neg_llh:
-            return reg_part - h_unreg
+            return poisson_part + regularization_part
         else:
-            return h_unreg - reg_part
+            return (poisson_part + regularization_part) * (-1)
 
     def evaluate_hesse_matrix(self, f, neg_llh=True):
         g_est, f = self.linear_model.evaluate(f)
@@ -61,7 +61,7 @@ class LLHThikonov:
         if neg_llh:
             return (self.tau * self.C) + H_unreg
         else:
-            return ((self.tau * self.C) + H_unreg) * -1
+            return ((self.tau * self.C) + H_unreg) * (-1)
 
 
     def __call__(self, f):
