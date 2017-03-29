@@ -112,7 +112,7 @@ if __name__ == '__main__':
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     llh_mcmc = ff.solution.LLHSolutionMCMC()
     llh_mcmc.initialize(vec_g=vec_g, model=model)
-    vec_f_est = llh_mcmc.run()
+    vec_f_est = llh_mcmc.run(x0=vec_f_est)
     print(vec_f_est)
     str_0 = 'unregularized:'
     str_1 = ''
