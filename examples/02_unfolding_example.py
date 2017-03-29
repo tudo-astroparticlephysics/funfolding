@@ -38,7 +38,7 @@ if __name__ == '__main__':
     x_min = 0.
     x_max = 20.
 
-    exponent = 2
+    exponent = 1
     scale = 5
 
     n_events_matrix = int(1e6)
@@ -59,7 +59,7 @@ if __name__ == '__main__':
           '02_x_y_smearing.png')
 
     binning_f = np.linspace(0, 20, 11)
-    binning_g = np.linspace(min(unbinned_g) - 1e-3, max(unbinned_g) + 1e-3, 61)
+    binning_g = np.linspace(min(unbinned_g) - 1e-3, max(unbinned_g) + 1e-3, 31)
     binned_g = np.digitize(unbinned_g, binning_g)
     binned_f = np.digitize(unbinned_f, binning_f)
 
@@ -98,13 +98,18 @@ if __name__ == '__main__':
 
     print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     llh_sol = ff.solution.LLHSolutionMinimizer()
-    vec_f_est, V_f_est = llh_sol.run(vec_g=vec_g,
-                                     model=model,
-                                     tau=0,
-                                     bounds=True)
+    llh_sol.initialize( vec_g=vec_g, model=model, bounds=True)
+    vec_f_est, V_f_est = llh_sol.run(tau=0)
     print(vec_f_est)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
+
+
+    print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
+    llh_mcmc = ff.solution.LLHSolutionMCMC()
+    llh_mcmc.initialize(vec_g=vec_g, model=model)
+    samples = llh_mcmc.run(tau=0)
+    print(samples.shape)

@@ -1,10 +1,11 @@
 import logging
 
 
-class Solution:
+class Solution(object):
     name = 'Solution'
 
     def __init__(self):
+        super(Solution, self).__init__()
         self.logger = logging.getLogger(self.name)
         self.logger.debug('Initilized {}'.format(self.name))
         self.status = -1

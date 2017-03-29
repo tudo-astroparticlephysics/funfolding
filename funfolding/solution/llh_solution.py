@@ -23,7 +23,7 @@ def create_C_thikonov(n_dims):
 
 
 class LLHThikonov:
-    def __init__(self, g, linear_model, tau):
+    def __init__(self, g, linear_model, tau=0., N_prior=False):
         if not isinstance(linear_model, LinearModel):
             raise ValueError("'model' has to be of type LinearModel!")
         self.linear_model = linear_model
@@ -33,29 +33,39 @@ class LLHThikonov:
         self.tau = tau
         self.status = 0
 
-    def evaluate_neg_log_llh(self, f):
+    def evaluate_llh(self, f, neg_llh=True):
         g_est, f = self.linear_model.evaluate(f)
-        poisson_part = np.sum(g_est + self.g * np.log(g_est))
+        poisson_part = np.sum(g_est - self.g * np.log(g_est))
         regularization_part = 0.5 * self.tau * np.dot(np.dot(f.T, self.C), f)
-        return regularization_part - poisson_part
+        if neg_llh:
+            return poisson_part + regularization_part
+        else:
+            return poisson_part - regularization_part
 
-    def evaluate_gradient(self, f):
+    def evaluate_gradient(self, f, neg_llh=True):
         g_est, f = self.linear_model.evaluate(f)
         h_unreg = np.sum(self.linear_model.A, axis=0)
         part_b = np.sum(self.linear_model.A.T * self.g * (1 / g_est), axis=1)
         h_unreg -= part_b
         reg_part = np.ones_like(h_unreg) * self.tau * np.dot(self.C, f)
-        return reg_part - h_unreg
+        if neg_llh:
+            return reg_part - h_unreg
+        else:
+            return h_unreg - reg_part
 
-    def evaluate_hesse_matrix(self, f):
+    def evaluate_hesse_matrix(self, f, neg_llh=True):
         g_est, f = self.linear_model.evaluate(f)
         H_unreg = np.dot(np.dot(self.linear_model.A.T,
                                 np.diag(self.g / g_est**2)),
                          self.linear_model.A)
-        return self.tau * self.C + H_unreg
+        if neg_llh:
+            return (self.tau * self.C) + H_unreg
+        else:
+            return ((self.tau * self.C) + H_unreg) * -1
+
 
     def __call__(self, f):
-        return self.evaluate_neg_log_llh(f)
+        return self.evaluate_llh(f)
 
 
 class LLHThikonovForLoops:
@@ -69,7 +79,7 @@ class LLHThikonovForLoops:
         self.tau = tau
         self.status = 0
 
-    def evaluate_neg_log_llh(self, f):
+    def evaluate_llh(self, f):
         m, n = self.linear_model.A.shape
         poisson_part = 0
         for i in range(m):
@@ -124,28 +134,119 @@ class LLHThikonovForLoops:
 class LLHSolutionMinimizer(Solution):
     name = 'LLHSolutionMinimizer'
 
-    def run(self, vec_g, model, tau, x0=None, bounds=None):
-        self.initialize()
-        super(LLHSolutionMinimizer, self).run()
+    def __init__(self):
+        super(LLHSolutionMinimizer, self).__init__()
+        self.llh = None
+        self.vec_g = None
+        self.bounds = None
+        self.model = None
+
+    def initialize(self, vec_g, model, bounds=None):
+        super(LLHSolutionMinimizer, self).initialize()
+        self.llh = LLHThikonov(g=vec_g, linear_model=model)
+        self.vec_g = vec_g
+        self.model = model
         if bounds is True:
-            bounds = model.generate_bounds(vec_g)
+           self.bounds = model.generate_bounds(vec_g)
+        else:
+            self.bounds = None
+
+    def run(self, tau=None, x0=None):
+        super(LLHSolutionMinimizer, self).run()
         if x0 is None:
-            x0 = model.generate_x0(vec_g)
-        x0 = model.set_x0(x0)
-        LLH = LLHThikonov(g=vec_g, linear_model=model, tau=tau)
-        cons = ({'type': 'eq', 'fun': lambda x: np.absolute(np.sum(x) -
-                                                            np.sum(x0))})
-        solution = minimize(fun=LLH.evaluate_neg_log_llh,
-                            x0=x0,
-                            bounds=bounds,
-                            method='SLSQP',
-                            # jac=LLH.evaluate_gradient,
-                            #  hess=LLH.evaluate_hesse_matrix
-                            constraints=cons)
-        hess_matrix = LLH.evaluate_hesse_matrix(solution.x)
-        V_f_est = linalg.inv(hess_matrix)
+            x0 = self.model.generate_x0(self.vec_g)
+        x0 = self.model.set_x0(x0)
+        if tau is not None and isinstance(tau, float):
+            self.llh.tau = tau
+        solution, V_f_est = self.__run_minimization__(x0)
         return solution.x, V_f_est
 
+    def __run_minimization__(self, x0):
+        cons = ({'type': 'eq', 'fun': lambda x: np.absolute(np.sum(x) -
+                                                            np.sum(x0))})
+        solution =  minimize(fun=self.llh.evaluate_llh,
+                             x0=x0,
+                             bounds=self.bounds,
+                             method='SLSQP',
+                             # jac=self.llh.evaluate_gradient,
+                             # hess=self.llh.evaluate_hesse_matrix
+                             constraints=cons)
+        hess_matrix = self.llh.evaluate_hesse_matrix(solution.x)
+        V_f_est = linalg.inv(hess_matrix)
+        return solution, V_f_est
+
+
+class LLHSolutionMCMC(Solution):
+    name = 'LLHSolutionMCMC'
+    def __init__(self, n_walker=100, n_used_steps=2000, n_burn_steps=1000):
+        super(LLHSolutionMCMC, self).__init__()
+        self.n_walker = n_walker
+        self.n_used_steps = n_used_steps
+        self.n_burn_steps = n_burn_steps
+        self.llh = None
+        self.vec_g = None
+        self.model = None
+
+    def initialize(self, vec_g, model):
+        super(LLHSolutionMCMC, self).initialize()
+        self.llh = LLHThikonov(g=vec_g, linear_model=model)
+        self.n_dims_f = model.A.shape[1]
+        self.vec_g = vec_g
+        self.model = model
+
+    def run(self, tau=None, x0=None):
+        super(LLHSolutionMCMC, self).run()
+        if x0 is None:
+            x0 = self.model.generate_x0(self.vec_g)
+        x0 = self.model.set_x0(x0)
+        if tau is not None and isinstance(tau, float):
+            self.llh.tau = tau
+        n_steps = self.n_used_steps + self.n_burn_steps
+        pos_x0 = np.zeros((self.n_walker, self.n_dims_f), dtype=float)
+        for i, x0_i in enumerate(x0):
+            pos_x0[:, i] = np.random.poisson(x0_i, size=self.n_walker)
+        sampler = self.__initiallize_mcmc__()
+        samples = self.__run_mcmc__(sampler, pos_x0, n_steps)
+        return samples
+
+    def __initiallize_mcmc__(self):
+        return emcee.EnsembleSampler(nwalkers=self.n_walker,
+                                             dim=self.n_dims_f,
+                                             lnpostfn=self.llh.evaluate_llh)
+
+    def __run_mcmc__(self, sampler, x0, n_steps):
+        sampler.run_mcmc(x0, n_steps)
+        samples = sampler.chain[:, self.n_burn_steps:, :].reshape((-1, n_dims))
+        return samples
+
+
+class LLHSolutionHybrid(LLHSolutionMCMC, LLHSolutionMinimizer):
+    name = 'LLHSolutionHybrid'
+
+    def __init__(self, n_walker=100, n_used_steps=2000, n_burn_steps=1000):
+        super(LLHSolutionHybrid, self).__init__(n_walker=n_walker,
+                                                n_used_steps=n_used_steps,
+                                                n_burn_steps=n_burn_steps)
+        self.bounds = None
+
+    def initialize(self, vec_g, model, bounds=None):
+        super(LLHSolutionHybrid, self).initialize(vec_g=vec_g,
+                                                  model=model)
+        if bounds is True:
+           self.bounds = model.generate_bounds(vec_g)
+        else:
+            self.bounds = None
+
+    def run(self,
+            vec_g,
+            model,
+            tau,
+            bounds=None,
+            x0=None,
+            n_walker=100,
+            initial_steps=500,
+            additional_steps=50):
+        pass
 
 class LLHSolutionDifferentialEvolution(Solution):
     name = 'LLHSolutionMinimizer'
@@ -159,37 +260,8 @@ class LLHSolutionDifferentialEvolution(Solution):
             x0 = model.generate_x0(vec_g)
         x0 = model.set_x0(x0)
         LLH = LLHThikonov(g=vec_g, linear_model=model, tau=tau)
-        solution = differential_evolution(func=LLH.evaluate_neg_log_llh,
+        solution = differential_evolution(func=LLH.evaluate_llh,
                                           bounds=bounds)
         hess_matrix = LLH.evaluate_hesse_matrix(solution.x)
         V_f_est = linalg.inv(hess_matrix)
         return solution.x, V_f_est
-
-
-class LLHSolutionMCMC(Solution):
-    name = 'LLHSolutionMCMC'
-
-    def run(self, vec_g, model, tau, bounds=None, x0=None, n_walker=100):
-        self.initialize()
-        super(LLHSolutionMinimizer, self).run()
-        if bounds is True:
-            bounds = model.generate_bounds(vec_g)
-        if x0 is None:
-            x0 = model.generate_x0(vec_g)
-        x0 = model.set_x0(x0)
-        n_dims = len(x0)
-
-        LLH = LLHThikonov(g=vec_g, linear_model=model, tau=tau)
-
-        sampler = emcee.EnsembleSampler(n_walker,
-                                        n_dims,
-                                        LLH.evaluate_neg_log_llh)
-
-        pos = np.zeros((n_walker, n_dims), dtype=float)
-        for i, x0_i in enumerate(x0):
-            pos[:, i] = np.random.poisson(x0_i, size=n_walker)
-
-        sampler.run_mcmc(pos, 500)
-        samples = sampler.chain[:, 50:, :].reshape((-1, n_dims))
-
-        return samples
