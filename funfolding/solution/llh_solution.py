@@ -217,8 +217,8 @@ class LLHSolutionMCMC(Solution):
         for i, x0_i in enumerate(x0):
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
         sampler = self.__initiallize_mcmc__()
-        vec_f = self.__run_mcmc__(sampler, pos_x0, n_steps)
-        return vec_f
+        vec_f, samples = self.__run_mcmc__(sampler, pos_x0, n_steps)
+        return vec_f, samples
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walker,
@@ -235,7 +235,7 @@ class LLHSolutionMCMC(Solution):
         probs = sampler.lnprobability[:, self.n_burn_steps:]
         probs = probs.reshape((-1))
         idx_max = np.argmax(probs)
-        return samples[idx_max, :]
+        return samples[idx_max, :], samples
 
 
 class LLHSolutionHybrid(LLHSolutionMCMC, LLHSolutionMinimizer):

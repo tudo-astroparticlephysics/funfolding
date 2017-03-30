@@ -7,7 +7,10 @@ from IPython import embed
 
 import funfolding as ff
 
+from matplotlib import pyplot as plt
+
 from scipy.special import lambertw
+import corner
 
 seed = 1337
 
@@ -41,7 +44,7 @@ if __name__ == '__main__':
     x_max = 20.
 
     exponent = 1
-    scale = 5
+    scale = 2
 
     n_events_matrix = int(1e6)
     n_events_test = int(1e4)
@@ -101,21 +104,29 @@ if __name__ == '__main__':
     print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     llh_sol = ff.solution.LLHSolutionMinimizer()
     llh_sol.initialize( vec_g=vec_g, model=model, bounds=True)
-    vec_f_est, V_f_est = llh_sol.run(tau=0)
-    print(vec_f_est)
+    vec_f_est_mini, V_f_est = llh_sol.run(tau=0)
+    print(vec_f_est_mini)
     str_0 = 'unregularized:'
     str_1 = ''
-    for f_i_est, f_i in zip(vec_f_est, vec_f):
+    for f_i_est, f_i in zip(vec_f_est_mini, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
 
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
-    llh_mcmc = ff.solution.LLHSolutionMCMC()
+    llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=5000)
     llh_mcmc.initialize(vec_g=vec_g, model=model)
-    vec_f_est = llh_mcmc.run(x0=vec_f_est)
-    print(vec_f_est)
+    vec_f_est_mcmc, sample = llh_mcmc.run()
+    print(vec_f_est_mcmc)
     str_0 = 'unregularized:'
     str_1 = ''
-    for f_i_est, f_i in zip(vec_f_est, vec_f):
+    for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
+    corner.corner(sample, truths=vec_f)
+    plt.savefig('corner_truth.png')
+    plt.clf()
+    corner.corner(sample, truths=vec_f_est_mini, truth_color='r')
+    plt.savefig('corner_mini.png')
+    plt.clf()
+    corner.corner(sample, truths=vec_f_est_mcmc, truth_color='springgreen')
+    plt.savefig('corner_mcmc.png')
