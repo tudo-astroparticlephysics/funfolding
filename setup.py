@@ -36,8 +36,9 @@ setup(
     install_requires=[
         'numpy',
         'scikit-learn>=0.18.1',
-        'theano',
-        'numexpr'],
+        'emcee',
+        'scipy',
+        'matplotlib'],
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
 )
