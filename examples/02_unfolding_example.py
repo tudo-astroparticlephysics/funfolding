@@ -103,7 +103,7 @@ if __name__ == '__main__':
 
     print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     llh_sol = ff.solution.LLHSolutionMinimizer()
-    llh_sol.initialize( vec_g=vec_g, model=model, bounds=True)
+    llh_sol.initialize(vec_g=vec_g, model=model, bounds=True)
     vec_f_est_mini, V_f_est = llh_sol.run(tau=0)
     print(vec_f_est_mini)
     str_0 = 'unregularized:'
@@ -113,10 +113,10 @@ if __name__ == '__main__':
     print('{}\t{}'.format(str_0, str_1))
 
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
-    llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=5000)
+    llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=5000,
+                                           random_state=1337)
     llh_mcmc.initialize(vec_g=vec_g, model=model)
-    vec_f_est_mcmc, sample = llh_mcmc.run()
-    print(vec_f_est_mcmc)
+    vec_f_est_mcmc, sample = llh_mcmc.run(tau=0)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
@@ -124,6 +124,8 @@ if __name__ == '__main__':
     print('{}\t{}'.format(str_0, str_1))
     corner.corner(sample, truths=vec_f)
     plt.savefig('corner_truth.png')
+    print(np.sum(vec_f_est_mcmc))
+    exit()
     plt.clf()
     corner.corner(sample, truths=vec_f_est_mini, truth_color='r')
     plt.savefig('corner_mini.png')

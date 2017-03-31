@@ -29,10 +29,12 @@ class LLHThikonov:
         self.linear_model = linear_model
         self.n_dims_f = linear_model.A.shape[1]
         self.g = g
+        self.N = np.sum(g)
         self.C = create_C_thikonov(self.n_dims_f)
         self.tau = tau
         self.status = 0
         self.neg_llh = neg_llh
+        self.N_prior = True
 
     def evaluate_llh(self, f):
         g_est, f = self.linear_model.evaluate(f)
@@ -43,6 +45,9 @@ class LLHThikonov:
                 return -np.inf
         poisson_part = np.sum(g_est - self.g * np.log(g_est))
         regularization_part = 0.5 * self.tau * np.dot(np.dot(f.T, self.C), f)
+        if self.N_prior:
+            sum_f = np.sum(f)
+            regularization_part += sum_f - self.N * np.log(sum_f)
         if self.neg_llh:
             return poisson_part + regularization_part
         else:
@@ -53,11 +58,12 @@ class LLHThikonov:
         h_unreg = np.sum(self.linear_model.A, axis=0)
         part_b = np.sum(self.linear_model.A.T * self.g * (1 / g_est), axis=1)
         h_unreg -= part_b
-        reg_part = np.ones_like(h_unreg) * self.tau * np.dot(self.C, f)
+        regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
+            self.C, f)
         if self.neg_llh:
-            return poisson_part + regularization_part
+            return h_unreg + regularization_part
         else:
-            return (poisson_part + regularization_part) * (-1)
+            return (h_unreg + regularization_part) * (-1)
 
     def evaluate_hesse_matrix(self, f):
         g_est, f = self.linear_model.evaluate(f)
@@ -68,7 +74,6 @@ class LLHThikonov:
             return (self.tau * self.C) + H_unreg
         else:
             return ((self.tau * self.C) + H_unreg) * (-1)
-
 
     def __call__(self, f):
         return self.evaluate_llh(f)
@@ -147,13 +152,13 @@ class LLHSolutionMinimizer(Solution):
         self.bounds = None
         self.model = None
 
-    def initialize(self, vec_g, model, bounds=None):
+    def initialize(self, vec_g, model, bounds=True):
         super(LLHSolutionMinimizer, self).initialize()
         self.llh = LLHThikonov(g=vec_g, linear_model=model)
         self.vec_g = vec_g
         self.model = model
         if bounds is True:
-           self.bounds = model.generate_bounds(vec_g)
+            self.bounds = model.generate_bounds(vec_g)
         else:
             self.bounds = None
 
@@ -170,13 +175,13 @@ class LLHSolutionMinimizer(Solution):
     def __run_minimization__(self, x0):
         cons = ({'type': 'eq', 'fun': lambda x: np.absolute(np.sum(x) -
                                                             np.sum(x0))})
-        solution =  minimize(fun=self.llh.evaluate_llh,
-                             x0=x0,
-                             bounds=self.bounds,
-                             method='SLSQP',
-                             # jac=self.llh.evaluate_gradient,
-                             # hess=self.llh.evaluate_hesse_matrix
-                             constraints=cons)
+        solution = minimize(fun=self.llh.evaluate_llh,
+                            x0=x0,
+                            bounds=self.bounds,
+                            method='SLSQP',
+                            # jac=self.llh.evaluate_gradient,
+                            # hess=self.llh.evaluate_hesse_matrix
+                            constraints=cons)
         hess_matrix = self.llh.evaluate_hesse_matrix(solution.x)
         V_f_est = linalg.inv(hess_matrix)
         return solution, V_f_est
@@ -184,6 +189,7 @@ class LLHSolutionMinimizer(Solution):
 
 class LLHSolutionMCMC(Solution):
     name = 'LLHSolutionMCMC'
+
     def __init__(self,
                  n_walker=100,
                  n_used_steps=2000,
@@ -198,12 +204,19 @@ class LLHSolutionMCMC(Solution):
         self.model = None
         self.n_dims_f = None
 
-    def initialize(self, vec_g, model):
+    def initialize(self, vec_g, model, bounds=True):
         super(LLHSolutionMCMC, self).initialize()
-        self.llh = LLHThikonov(g=vec_g, linear_model=model, neg_llh=False)
-        self.n_dims_f = model.A.shape[1]
+        self.llh = LLHThikonov(g=vec_g,
+                               linear_model=model,
+                               neg_llh=False,
+                               N_prior=False)
+        self.n_dims_f = model.dim_f
         self.vec_g = vec_g
         self.model = model
+        if bounds is True:
+            self.bounds = model.generate_bounds(vec_g)
+        else:
+            self.bounds = None
 
     def run(self, tau=None, x0=None):
         super(LLHSolutionMCMC, self).run()
@@ -251,7 +264,7 @@ class LLHSolutionHybrid(LLHSolutionMCMC, LLHSolutionMinimizer):
         super(LLHSolutionHybrid, self).initialize(vec_g=vec_g,
                                                   model=model)
         if bounds is True:
-           self.bounds = model.generate_bounds(vec_g)
+            self.bounds = model.generate_bounds(vec_g)
         else:
             self.bounds = None
 
@@ -265,6 +278,7 @@ class LLHSolutionHybrid(LLHSolutionMCMC, LLHSolutionMinimizer):
             initial_steps=500,
             additional_steps=50):
         pass
+
 
 class LLHSolutionDifferentialEvolution(Solution):
     name = 'LLHSolutionMinimizer'

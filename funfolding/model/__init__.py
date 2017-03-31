@@ -1,4 +1,4 @@
-from .linear_model import BasicLinearModel, LinearModelConstantN, LinearModel
+from .linear_model import BasicLinearModel, SphericalLinearModel, LinearModel
 
 
-__all__ = ['BasicLinearModel', 'LinearModelConstantN']
+__all__ = ['BasicLinearModel', 'SphericalLinearModel', 'LinearModel']
