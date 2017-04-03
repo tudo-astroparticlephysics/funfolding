@@ -44,7 +44,7 @@ if __name__ == '__main__':
     x_max = 20.
 
     exponent = 1
-    scale = 2
+    scale = 0.2
 
     n_events_matrix = int(1e6)
     n_events_test = int(1e4)
@@ -101,10 +101,23 @@ if __name__ == '__main__':
             str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
         print('{}\t{}'.format(str_0, str_1))
 
+    print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) : (FRIST RUN)')
+    llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=2000,
+                                           random_state=1337)
+    llh_mcmc.initialize(vec_g=vec_g, model=model)
+    vec_f_est_mcmc, sample, probs = llh_mcmc.run(tau=0)
+    str_0 = 'unregularized:'
+    str_1 = ''
+    for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
+        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
+    print('{}\t{}'.format(str_0, str_1))
+
+
     print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     llh_sol = ff.solution.LLHSolutionMinimizer()
     llh_sol.initialize(vec_g=vec_g, model=model, bounds=True)
-    vec_f_est_mini, V_f_est = llh_sol.run(tau=0)
+    solution, V_f_est = llh_sol.run(tau=0)
+    vec_f_est_mini = solution.x
     print(vec_f_est_mini)
     str_0 = 'unregularized:'
     str_1 = ''
@@ -113,19 +126,35 @@ if __name__ == '__main__':
     print('{}\t{}'.format(str_0, str_1))
 
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
-    llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=5000,
+    llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=2000,
                                            random_state=1337)
     llh_mcmc.initialize(vec_g=vec_g, model=model)
-    vec_f_est_mcmc, sample = llh_mcmc.run(tau=0)
+    vec_f_est_mcmc, sample, probs = llh_mcmc.run(tau=0)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
+
+
+    print('\nMinimize Solution (mcmc seed)')
+    llh_sol = ff.solution.LLHSolutionMinimizer()
+    llh_sol.initialize(vec_g=vec_g, model=model, bounds=True)
+    solution, V_f_est = llh_sol.run(tau=0, x0=vec_f_est_mcmc)
+    vec_f_est_mini = solution.x
+    print(vec_f_est_mini)
+    str_0 = 'unregularized:'
+    str_1 = ''
+    for f_i_est, f_i in zip(vec_f_est_mini, vec_f):
+        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
+    print('{}\t{}'.format(str_0, str_1))
+    exit()
     corner.corner(sample, truths=vec_f)
     plt.savefig('corner_truth.png')
     print(np.sum(vec_f_est_mcmc))
-    exit()
+
+    embed()
+
     plt.clf()
     corner.corner(sample, truths=vec_f_est_mini, truth_color='r')
     plt.savefig('corner_mini.png')

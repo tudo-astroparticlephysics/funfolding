@@ -170,7 +170,7 @@ class LLHSolutionMinimizer(Solution):
         if tau is not None and isinstance(tau, float):
             self.llh.tau = tau
         solution, V_f_est = self.__run_minimization__(x0)
-        return solution.x, V_f_est
+        return solution, V_f_est
 
     def __run_minimization__(self, x0):
         cons = ({'type': 'eq', 'fun': lambda x: np.absolute(np.sum(x) -
@@ -194,7 +194,8 @@ class LLHSolutionMCMC(Solution):
                  n_walker=100,
                  n_used_steps=2000,
                  n_burn_steps=1000,
-                 random_state=None):
+                 random_state=None,
+                 n_threads=1):
         super(LLHSolutionMCMC, self).__init__(random_state=random_state)
         self.n_walker = n_walker
         self.n_used_steps = n_used_steps
@@ -203,6 +204,7 @@ class LLHSolutionMCMC(Solution):
         self.vec_g = None
         self.model = None
         self.n_dims_f = None
+        self.n_threads = 1
 
     def initialize(self, vec_g, model, bounds=True):
         super(LLHSolutionMCMC, self).initialize()
@@ -230,13 +232,14 @@ class LLHSolutionMCMC(Solution):
         for i, x0_i in enumerate(x0):
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
         sampler = self.__initiallize_mcmc__()
-        vec_f, samples = self.__run_mcmc__(sampler, pos_x0, n_steps)
-        return vec_f, samples
+        vec_f, samples, probs = self.__run_mcmc__(sampler, pos_x0, n_steps)
+        return vec_f, samples, probs
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walker,
                                      dim=self.n_dims_f,
-                                     lnpostfn=self.llh.evaluate_llh)
+                                     lnpostfn=self.llh.evaluate_llh,
+                                     threads=self.n_threads)
 
     def __run_mcmc__(self, sampler, x0, n_steps):
         sampler.run_mcmc(pos0=x0,
@@ -248,7 +251,7 @@ class LLHSolutionMCMC(Solution):
         probs = sampler.lnprobability[:, self.n_burn_steps:]
         probs = probs.reshape((-1))
         idx_max = np.argmax(probs)
-        return samples[idx_max, :], samples
+        return samples[idx_max, :], samples, probs
 
 
 class LLHSolutionHybrid(LLHSolutionMCMC, LLHSolutionMinimizer):
