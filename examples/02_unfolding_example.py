@@ -1,13 +1,9 @@
-import logging
-
 import numpy as np
 from matplotlib import pyplot as plt
 
 from IPython import embed
 
 import funfolding as ff
-
-from matplotlib import pyplot as plt
 
 from scipy.special import lambertw
 import corner
