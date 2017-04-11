@@ -25,6 +25,7 @@ class ClassicBinning(Discretization):
         else:
             self.range = range
         self.edges = []
+        self.n_bins = None
         self.t_to_i = None
         self.i_to_t = None
         self.n_bins = None
@@ -160,7 +161,7 @@ class ClassicBinning(Discretization):
                     raise RuntimeError('Events sum changed!')
             except AssertionError:
                 break
-
+        self.n_bins = len(self.i_to_t)
         return self
 
     def merge(self,

@@ -93,6 +93,9 @@ class TreeBinningSklearn(object):
                 max_leaf_nodes=max_leaf_nodes,
                 max_features=max_features,
                 random_state=random_state)
+        self.leaf_idx_mapping = None
+        self.n_bins = None
+
 
     def fit(self,
             X,
@@ -108,12 +111,22 @@ class TreeBinningSklearn(object):
         self.tree.fit(X=X,
                       y=y,
                       sample_weight=sample_weight)
+        self.leaf_idx_mapping = {}
+        is_leaf = np.where(self.tree.tree_.feature == -2)[0]
+        counter = 0
+        for is_leaf_i in is_leaf:
+            self.leaf_idx_mapping[is_leaf_i] = counter
+            counter += 1
+        self.n_bins = len(self.leaf_idx_mapping)
 
     def predict(self, X):
         return self.tree.predict(X)
 
     def digitize(self, X):
-        return self.tree.apply(X)
+        leafyfied = self.tree.apply(X)
+        digitized = np.array([self.leaf_idx_mapping[val_i]
+                              for val_i in leafyfied])
+        return digitized
 
     def decision_path(self, X, column_names=None):
         indicator = self.tree.decision_path(X)

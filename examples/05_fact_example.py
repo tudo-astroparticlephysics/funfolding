@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 
 from funfolding import discretization, model, solution
 
+import corner
 
 def read_in(filename='Gamma_clas_sep.hdf5'):
     df = pd.read_hdf(filename)
@@ -93,59 +94,109 @@ if __name__ == '__main__':
 
 
     n_bins = len(closest.i_to_t)
-    single_obs_model_100 = model.BasicLinearModel()
+    single_obs_model_more_bins = model.BasicLinearModel()
     max_e = np.max(X[:, 1]) + 1e-3
     min_e = np.min(X[:, 1]) - 1e-3
     binning = np.linspace(min_e, max_e, n_bins + 1)
     binned_g = np.digitize(X[:, 1], binning)
-    single_obs_model_100.initialize(g=binned_g,
+    single_obs_model_more_bins.initialize(g=binned_g,
                                     f=binned_E)
 
     vec_g, vec_f = merged_model.generate_vectors(binned_g, binned_E)
-    ax_condition = unmerged_model.evaluate_condition(label='Unmerged')
-    merged_model.evaluate_condition(ax=ax_condition, label='Merged')
-    single_obs_model.evaluate_condition(ax=ax_condition,
-                                        label='Single Observable (10 Bins)')
-    single_obs_model_100.evaluate_condition(
+
+
+    tree_obs = ["Size",
+                "Width",
+                "Length",
+                "M3Trans",
+                "M3Long",
+                "ConcCore",
+                "m3l",
+                "m3t",
+                "Concentration_onePixel",
+                "Concentration_twoPixel",
+                "Leakage",
+                "Leakage2",
+                "concCOG",
+                "numIslands",
+                "numPixelInShower",
+                "phChargeShower_mean",
+                "phChargeShower_variance",
+                "phChargeShower_max"]
+
+    X_tree = df_A.get(tree_obs).values
+    X_tree_test = df_test.get(tree_obs).values
+
+    tree_binning = discretization.TreeBinningSklearn(
+        regression=False,
+        max_features=None,
+        min_samples_split=2,
+        max_depth=None,
+        min_samples_leaf=100,
+        max_leaf_nodes=100,
+        random_state=1337)
+
+    tree_binning.fit(X_tree,
+                     binned_E,
+                     uniform=True)
+
+
+    binned_g = tree_binning.digitize(X_tree)
+
+    tree_model = model.BasicLinearModel()
+    tree_model.initialize(g=binned_g,
+                          f=binned_E)
+
+    ax_condition = unmerged_model.evaluate_condition(
+        label='2 Observables (Unmerged; {} Bins)'.format(
+            classic_binning.n_bins))
+    merged_model.evaluate_condition(
         ax=ax_condition,
-        label='Single Observable ({} Bins)'.format(n_bins))
+        label='2 Observables (Merged; {} Bins)'.format(closest.n_bins))
+    single_obs_model.evaluate_condition(
+        ax=ax_condition,
+        label='Single Observable (10 Bins)')
+    single_obs_model_more_bins.evaluate_condition(
+        ax=ax_condition,
+        label='Single Observable ({} Bins)'.format(closest.n_bins))
+    tree_model.evaluate_condition(
+        ax=ax_condition,
+        label='Tree Based ({} Bins)'.format(tree_binning.n_bins))
+
     plt.legend(loc='lower left')
     ax_condition.set_yscale("log", nonposy='clip')
     plt.savefig('05_condition.png')
 
-    exit()
+    binned_g_test = tree_binning.digitize(X_tree_test)
+    vec_g, vec_f = tree_model.generate_vectors(binned_g_test,
+                                               binned_E_test)
+    print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
+    llh_mcmc = solution.LLHSolutionMCMC(n_used_steps=2000,
+                                        random_state=1337)
+    llh_mcmc.initialize(vec_g=vec_g, model=tree_model)
+    vec_f_est_mcmc, sample, probs = llh_mcmc.run(tau=0)
+    std = np.std(sample, axis=0)
+    str_0 = 'unregularized:'
+    str_1 = ''
+    for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
+        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
+    print('{}\t{}'.format(str_0, str_1))
 
-    binned_g_unmerged_test = classic_binning.digitize(X_test)
-    vec_g, vec_f = unmerged_model.generate_vectors(binned_g_unmerged_test,
-                                                 binned_E_test)
+    corner.corner(sample, truths=vec_f_est_mcmc, truth_color='r')
+    plt.savefig('05_corner_fact.png')
 
-    svd = solution.SVDSolution()
-    print('\n===========================\nResults for each Bin: Unfolded/True')
-    print('\nSVD Solution for diffrent number of kept sigular values:')
-    for i in range(1, 10):
-        vec_f_est, V_f_est = svd.run(vec_g=vec_g,
-                                     model=unmerged_model,
-                                     keep_n_sig_values=i)
-        str_0 = '{} singular values:'.format(str(i).zfill(2))
-        str_1 = ''
-        for f_i_est, f_i in zip(vec_f_est, vec_f):
-            str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
-        print('{}\t{}'.format(str_0, str_1))
-
-    binned_g_merged_test = closest.digitize(X_test)
-    vec_g, vec_f = merged_model.generate_vectors(binned_g_merged_test,
-                                                 binned_E_test)
-    svd = solution.SVDSolution()
-    print('\n===========================\nResults for each Bin: Unfolded/True')
-    print('\nSVD Solution for diffrent number of kept sigular values:')
-    for i in range(1, 10):
-        vec_f_est, V_f_est = svd.run(vec_g=vec_g,
-                                     model=merged_model,
-                                     keep_n_sig_values=i)
-        str_0 = '{} singular values:'.format(str(i).zfill(2))
-        str_1 = ''
-        for f_i_est, f_i in zip(vec_f_est, vec_f):
-            str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
-        print('{}\t{}'.format(str_0, str_1))
-
-
+    fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+    bin_mids = (binning_E[1:] + binning_E[:-1]) / 2.
+    bin_width = (binning_E[1:] - binning_E[:-1]) / 2.
+    _, vec_f_truth = tree_model.generate_vectors(binned_g,
+                                                 binned_E)
+    vec_f_truth = vec_f_truth * sum(vec_f) / sum(vec_f_truth)
+    plt.hist(bin_mids, bins=binning_E, weights=vec_f_truth, histtype='step')
+    ax.errorbar(bin_mids,
+                vec_f_est_mcmc,
+                yerr=std,
+                xerr=bin_width,
+                ls="",
+                color="r", label="Unfolding")
+    ax.set_yscale("log", nonposy='clip')
+    fig.savefig('05_unfolding_mcmc.png')
