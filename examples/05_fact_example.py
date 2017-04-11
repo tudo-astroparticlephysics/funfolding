@@ -83,11 +83,37 @@ if __name__ == '__main__':
     merged_model.initialize(g=binned_g,
                      f=binned_E)
 
+    single_obs_model = model.BasicLinearModel()
+    max_e = np.max(X[:, 1]) + 1e-3
+    min_e = np.min(X[:, 1]) - 1e-3
+    binning = np.linspace(min_e, max_e, 11)
+    binned_g = np.digitize(X[:, 1], binning)
+    single_obs_model.initialize(g=binned_g,
+                                f=binned_E)
+
+
+    n_bins = len(closest.i_to_t)
+    single_obs_model_100 = model.BasicLinearModel()
+    max_e = np.max(X[:, 1]) + 1e-3
+    min_e = np.min(X[:, 1]) - 1e-3
+    binning = np.linspace(min_e, max_e, n_bins + 1)
+    binned_g = np.digitize(X[:, 1], binning)
+    single_obs_model_100.initialize(g=binned_g,
+                                    f=binned_E)
+
     vec_g, vec_f = merged_model.generate_vectors(binned_g, binned_E)
     ax_condition = unmerged_model.evaluate_condition(label='Unmerged')
     merged_model.evaluate_condition(ax=ax_condition, label='Merged')
-    plt.legend()
+    single_obs_model.evaluate_condition(ax=ax_condition,
+                                        label='Single Observable (10 Bins)')
+    single_obs_model_100.evaluate_condition(
+        ax=ax_condition,
+        label='Single Observable ({} Bins)'.format(n_bins))
+    plt.legend(loc='lower left')
+    ax_condition.set_yscale("log", nonposy='clip')
     plt.savefig('05_condition.png')
+
+    exit()
 
     binned_g_unmerged_test = classic_binning.digitize(X_test)
     vec_g, vec_f = unmerged_model.generate_vectors(binned_g_unmerged_test,

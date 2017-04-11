@@ -1,5 +1,67 @@
+import logging
+
 import numpy as np
+import copy
+
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+
+
+logger = logging.getLogger('TreeBinningSklearn')
+
+
+def __sample_uniform__(y, sample_weight=None):
+    freq = np.bincount(y, weights=sample_weight)
+    mask = freq > 0
+    if sample_weight is None:
+        freq = freq.astype(float)
+    freq /= np.min(freq[mask])
+    rnd = np.random.uniform(size=len(y)) * freq[y]
+    return rnd <= 1.
+
+
+def get_parents(tree):
+    def walk_path(tree, idx, last_idx, node_list):
+        node_list.append([idx, last_idx])
+        l_child = tree.children_left[idx]
+        if l_child != -1:
+            node_list.extend(walk_path(tree, l_child, idx, node_list))
+        r_child = tree.children_right[idx]
+        if r_child != -1:
+            node_list.extend(walk_path(tree, r_child, idx, node_list))
+        return node_list
+
+    node_list = walk_path(tree, 0, -1, [])
+    parents = np.zeros_like(tree.children_left, dtype=int)
+    for own_idx, parent_idx in node_list:
+        parents[own_idx] = parent_idx
+    return parents
+
+
+def remove_node(tree, node_idx):
+    tree.children_right[node_idx] = -4
+    tree.children_left[node_idx] = -4
+    tree.feature[node_idx] = -4
+    tree.threshold[node_idx] = -4
+
+
+def set_to_leaf(tree, node_idx):
+    l_child = tree.children_left[node_idx]
+    r_child = tree.children_left[node_idx]
+    if l_child == -1 and r_child == -1:
+        logger.warn('{} is already a leaf!')
+    elif l_child == -1 and r_child != -1:
+        raise RuntimeError('Broken Tree! l_child is -1 while r_child is != -1')
+    elif l_child != -1 and r_child == -1:
+        raise RuntimeError('Broken Tree! r_child is -1 while l_child is != -1')
+    else:
+        remove_node(tree, l_child)
+        remove_node(tree, r_child)
+
+        tree.children_right[node_idx] = -1
+        tree.children_left[node_idx] = -1
+        tree.feature[node_idx] = -2
+        tree.threshold[node_idx] = -2
+
 
 class TreeBinningSklearn(object):
     def __init__(self,
@@ -14,7 +76,7 @@ class TreeBinningSklearn(object):
         if not isinstance(random_state, np.random.RandomState):
             random_state = np.random.RandomState(random_state)
         self.random_state = random_state
-
+        self.regression = regression
         if regression:
             self.tree = DecisionTreeRegressor(
                 max_depth=max_depth,
@@ -35,7 +97,14 @@ class TreeBinningSklearn(object):
     def fit(self,
             X,
             y,
-            sample_weight=None):
+            sample_weight=None,
+            uniform=True):
+        if self.regression and uniform:
+            logger.warn('Uniform smapling is only supported for classifcation')
+        elif uniform:
+            mask = __sample_uniform__(y, sample_weight=sample_weight)
+            y = y[mask]
+            X = X[mask]
         self.tree.fit(X=X,
                       y=y,
                       sample_weight=sample_weight)
@@ -49,3 +118,38 @@ class TreeBinningSklearn(object):
     def decision_path(self, X, column_names=None):
         indicator = self.tree.decision_path(X)
         return indicator
+
+    def copy(self):
+        clone = TreeBinningSklearn(random_state=self.random_state)
+        clone.tree = copy.deepcopy(self.tree)
+        return clone
+
+    def prune(self, X, threshold):
+        tree = self.tree.tree_
+
+        leafyfied = self.tree.apply(X)
+        occureance = np.bincount(leafyfied, minlength=tree.node_count)
+
+        parents = get_parents(tree)
+
+        is_leaf = np.where(self.tree.children_right == -1)[0]
+        is_below = occureance < threshold
+        is_leaf_below = np.logical_and(is_leaf, is_below)
+        while any(is_leaf_below):
+            idx = np.where(is_leaf_below)[0][-1]
+            parent_idx = parents[idx]
+            set_to_leaf(tree, parent_idx)
+
+            l_child = tree.children_left[parent_idx]
+            r_child = tree.children_right[parent_idx]
+
+            is_leaf[l_child] = False
+            is_leaf[r_child] = False
+            is_leaf[parent_idx] = True
+
+            occureance[parent_idx] += occureance[idx]
+            occureance[parent_idx] += occureance[idx]
+            is_below = occureance < threshold
+
+            is_leaf_below = np.logical_and(is_leaf, is_below)
+

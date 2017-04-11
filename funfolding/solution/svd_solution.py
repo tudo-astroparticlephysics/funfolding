@@ -1,5 +1,6 @@
 import numpy as np
 from scipy import linalg
+from matplotlib import pyplot as plt
 
 from .solution import Solution
 from ..model import LinearModel
@@ -36,3 +37,13 @@ class SVDSolution(Solution):
         vec_f *= factor
         V_f_est *= factor
         return vec_f, V_f_est
+
+    def evaluate_singular_values(self,
+                                 vec_g,
+                                 model,
+                                 ax=None,):
+        if ax is None:
+            fig, ax = plt.subplots()
+        ax.set_xlabel(r'Index $j$')
+        ax.set_ylabel(r'$\frac{\sigma_i}{\sigma_0}$')
+

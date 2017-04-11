@@ -57,7 +57,7 @@ def visualize_classic_binning(ax,
                 var_2_h = binning.edges[1][idx]
 
             idx = t_label[1] - 1
-            if idx < 0 or idx >= len(binning.edges[0]):
+            if idx < 0 or idx >= len(binning.edges[1]):
                 var_2_l = None
                 fill_bin = False
             else:
@@ -69,7 +69,6 @@ def visualize_classic_binning(ax,
             for edge in temp_edges:
                 if all([e_i is not None for e_i in edge]):
                     edges.append(edge)
-
             if fill_bin:
                 ax.fill([var_1_l, var_1_l, var_1_h, var_1_h],
                         [var_2_l, var_2_h, var_2_h, var_2_l],

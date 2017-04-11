@@ -1,5 +1,7 @@
 import logging
 import numpy as np
+from scipy import linalg
+from matplotlib import pyplot as plt
 
 
 def ct(f_spherical, N):
@@ -98,6 +100,30 @@ class BasicLinearModel(LinearModel):
         for i in range(n):
             bounds.append((0, n_events))
         return bounds
+
+    def evaluate_condition(self, ax=None, label='Linear Model'):
+        self.logger.debug('Evaluation of Singular Values!')
+        if self.status < 0:
+            raise RuntimeError("Model has to be intilized. "
+                               "Run 'model.initialize' first!")
+        U, S_values, V = linalg.svd(self.A)
+        if ax is None:
+            _, ax = plt.subplots()
+        ax.set_xlabel(r'Index $j$')
+        ax.set_ylabel(r'Normed Singular Values $\frac{\lambda_i}{\lambda_0}$')
+
+        S_values = S_values / S_values[0]
+        binning = np.linspace(-0.5,
+                              len(S_values) - 0.5,
+                              len(S_values) + 1)
+        x_pos = np.arange(len(S_values))
+        ax.hist(x_pos,
+                bins=binning,
+                weights=S_values,
+                histtype='step',
+                label=label)
+        ax.set_xlim([binning[0], binning[-1]])
+        return ax
 
 
 class SphericalLinearModel(BasicLinearModel):
