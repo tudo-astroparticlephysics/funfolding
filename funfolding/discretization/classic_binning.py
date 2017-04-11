@@ -107,6 +107,8 @@ class ClassicBinning(Discretization):
         counted = np.bincount(binned,
                               weights=sample_weight,
                               minlength=self.n_bins)
+        original_counted = counted.copy()
+        orignal_mean_label = counted.copy()
         original_sum = np.sum(counted)
 
         if min_samples is None and max_bins is None:
@@ -125,8 +127,8 @@ class ClassicBinning(Discretization):
                 w = y * sample_weight
             no_entry = counted == 0
             self.mean_label = np.bincount(binned,
-                                    weights=w,
-                                    minlength=self.n_bins)
+                                          weights=w,
+                                          minlength=self.n_bins)
             self.mean_label[no_entry] = np.nan
             self.mean_label /= counted
             self.__get_bin_for_merge__ = self.__get_most_similar_neighbor__
@@ -142,6 +144,9 @@ class ClassicBinning(Discretization):
             try:
                 assert min_val <= min_samples
                 assert self.n_bins > max_bins
+            except AssertionError:
+                break
+            else:
                 min_indices = np.where(counted == min_val)[0]
                 min_idx = self.random_state.choice(min_indices)
                 neighbors = self.__get_neighbors__(min_idx)
@@ -150,7 +155,7 @@ class ClassicBinning(Discretization):
                     neighbors=neighbors,
                     counted=counted,
                     **kwargs)
-                self.__merge_bins__( i_label_keep, i_label_remove)
+                self.__merge_bins__(i_label_keep, i_label_remove)
                 counted[i_label_keep] += counted[i_label_remove]
                 mask = np.ones_like(counted, dtype=bool)
                 mask[i_label_remove] = False
@@ -159,8 +164,7 @@ class ClassicBinning(Discretization):
                 self.n_bins -= 1
                 if np.sum(counted) != original_sum:
                     raise RuntimeError('Events sum changed!')
-            except AssertionError:
-                break
+
         self.n_bins = len(self.i_to_t)
         return self
 
@@ -243,11 +247,8 @@ class ClassicBinning(Discretization):
                 self.t_to_i[t_label] -= 1
         self.i_to_t = {}
         for t_label, i_label in self.t_to_i.items():
-            try:
-                t_labels = self.i_to_t[i_label]
-                t_labels.append(t_label)
-            except KeyError:
-                t_labels = [t_label]
+            t_labels = self.i_to_t.get(i_label, [])
+            t_labels.append(t_label)
             self.i_to_t[i_label] = t_labels
         return i_label_keep, i_label_remove
 
@@ -269,8 +270,7 @@ class ClassicBinning(Discretization):
                                       neighbors,
                                       counted):
         mean_label = self.mean_label
-        counted_neighbors = counted[neighbors]
-        min_counted = np.min(counted_neighbors)
+        min_counted = np.min(counted[neighbors])
         if min_counted == 0 or counted[bin_a] == 0:
             i_label_keep, i_label_remove = self.__get_closest_neighbor__(
                 bin_a,
@@ -278,7 +278,7 @@ class ClassicBinning(Discretization):
                 counted)
         else:
             label_diff = np.absolute(mean_label[neighbors] - mean_label[bin_a])
-            min_idx = np.where(label_diff == np.min(label_diff))[0]
+            min_idx = np.where(label_diff == np.nanmin(label_diff))[0]
             if len(min_idx) > 0:
                 neighbors = [neighbors[i] for i in min_idx]
                 i_label_keep, i_label_remove = self.__get_closest_neighbor__(
@@ -293,7 +293,16 @@ class ClassicBinning(Discretization):
                 else:
                     i_label_keep = bin_a
                     i_label_remove = bin_b
-
+        if np.isnan(mean_label[i_label_keep]) and \
+                np.isnan(mean_label[i_label_remove]):
+            mean_label[i_label_keep] = np.nan
+        elif not np.isnan(mean_label[i_label_keep]) and \
+                np.isnan(mean_label[i_label_remove]):
+            pass
+        elif np.isnan(mean_label[i_label_keep]) and not \
+                np.isnan(mean_label[i_label_remove]):
+            mean_label[i_label_keep] = mean_label[i_label_remove]
+        else:
             s_k = counted[i_label_keep] * mean_label[i_label_keep]
             s_r = counted[i_label_remove] * mean_label[i_label_remove]
             s = s_r + s_k
