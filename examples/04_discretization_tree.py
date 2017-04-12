@@ -64,6 +64,8 @@ if __name__ == '__main__':
                            binning_E)
 
     tree_binning = discretization.TreeBinning()
-    tree_binning.fit(X_tree,
-                     binned_E)
+    import cProfile
+    cProfile.run('tree_binning.fit(X_tree_test, binned_E_test)')
+
     print(tree_binning.tree.feature)
+    print(tree_binning.tree.threshold)
