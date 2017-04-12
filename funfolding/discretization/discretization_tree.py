@@ -4,7 +4,7 @@ import copy
 
 
 def f_entropy(y, sample_weight):
-    sum_w = np.sum(y)
+    sum_w = np.sum(sample_weight)
     p = np.bincount(y, sample_weight) / float(sum_w)
     ep = stats.entropy(p)
     if ep == -float('inf'):
@@ -35,7 +35,10 @@ class Node(object):
         self.split_mask_data = split_mask_data
         self.direction = direction
         self.random_state = base_tree.random_state
-        self.parent = path[-1]
+        if len(path) == 0:
+            self.parent = -1
+        else:
+            self.parent = path[-1]
         self.depth = len(path)
 
         self.new_split_mask = None
@@ -143,7 +146,7 @@ class Node(object):
         self.base_tree.feature.append(self.feature)
         self.base_tree.threshold.append(self.threshold)
         self.base_tree.information_gain.append(self.information_gain)
-        self.base_tree.parents.append(self.parents)
+        self.base_tree.parent.append(self.parent)
         self.base_tree.depth.append(self.depth)
         if terminal or self.must_be_terminal:
             self.base_tree.children_right[-1] = -1
@@ -209,7 +212,7 @@ class DiscretizationTree(object):
         self.threshold = []
         self.value = []
         self.weighted_n_node_samples = []
-        self.parents = []
+        self.parent = []
         self.depth = []
         #  Quantities
         self.node_count = -1
@@ -255,23 +258,28 @@ class DiscretizationTree(object):
         if sample_weight is None:
             sample_weight = np.ones_like(y, dtype=float)
         self.sample_weight = sample_weight
-
+        init_split_mask = np.ones_like(self.X, dtype=bool)
         if X_data is not None:
             self.X_data = X_data
             if sample_weight_data is None:
                 sample_weight_data = np.ones_like(y, dtype=float)
             self.sample_weight_data = sample_weight_data
             self.total_weight = np.sum(self.sample_weight_data)
+            init_split_mask_data = np.ones_like(self.X_data, dtype=bool)
         else:
             self.total_weight = np.sum(self.sample_weight)
+            init_split_mask_data = None
         current_depth = -1
         keep_building = True
         while keep_building:
             node_list = []
             # generate temporary nodes
             if current_depth == -1:
-                root = Node(idx=0,
-                            path=[])
+                root = Node(base_tree=self,
+                            path=[],
+                            split_mask=init_split_mask,
+                            split_mask_data=init_split_mask_data,
+                            direction='n')
                 node_list.append(root)
             for node in node_list:
                 if current_depth != self.max_depth:
@@ -280,7 +288,7 @@ class DiscretizationTree(object):
             sorted_nodes = sorted(node_list)
             node_list = []
             for i, optimized_node in enumerate(sorted_nodes):
-                unregistered_nodes = sorted_nodes[i:] + len(node_list)
+                unregistered_nodes = len(sorted_nodes[i:]) + len(node_list)
                 n_potential_leaves = self.max_leaf_nodes - self.n_outputs
                 if n_potential_leaves <= unregistered_nodes + 2:
                     #  Check is node has to be a leaf to not violate
@@ -290,7 +298,7 @@ class DiscretizationTree(object):
                     terminal = True
                 else:
                     terminal = False
-                r_node, l_node = node_list.register(terminal=terminal)
+                r_node, l_node = optimized_node.register(terminal=terminal)
                 if r_node is not None and l_node is not None:
                     node_list.append(r_node)
                     node_list.append(l_node)
@@ -355,3 +363,4 @@ class TreeBinning(object):
             self.leaf_idx_mapping[is_leaf_i] = counter
             counter += 1
         self.n_bins = len(self.leaf_idx_mapping)
+        return self
