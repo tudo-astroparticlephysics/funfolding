@@ -182,8 +182,8 @@ if __name__ == '__main__':
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
 
-    corner.corner(sample, truths=vec_f_est_mcmc, truth_color='r')
-    plt.savefig('05_corner_fact.png')
+    # corner.corner(sample, truths=vec_f_est_mcmc, truth_color='r')
+    # plt.savefig('05_corner_fact.png')
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 4))
     bin_mids = (binning_E[1:] + binning_E[:-1]) / 2.

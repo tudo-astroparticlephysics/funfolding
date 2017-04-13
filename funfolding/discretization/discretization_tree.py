@@ -4,6 +4,7 @@ import copy
 from scipy.optimize import minimize, minimize_scalar, basinhopping
 from sortedcontainers import SortedList
 
+from IPython import embed
 
 class InfoCache:
     def __init__(self):
@@ -20,7 +21,12 @@ def f_entropy(y, sample_weight):
         sum_w = len(y)
     else:
         sum_w = np.sum(sample_weight)
-    p = np.bincount(y, sample_weight) / float(sum_w)
+    try:
+        p = np.bincount(y, sample_weight) / float(sum_w)
+    except:
+        print(y)
+        print(sample_weight)
+        exit()
     ep = stats.entropy(p)
     if ep == -float('inf'):
         return 0.0
@@ -59,15 +65,24 @@ def init_min_func(X, y, sample_weight, sum_w, entropy):
         result_dict['sum_w_l'] = sum_w_l
         result_dict['ent_r'] = ent_r
         result_dict['ent_l'] = ent_l
-        information_gain = ent_r * sum_w_r / sum_w
-        information_gain += ent_l * sum_w_l / sum_w
+        try:
+            information_gain = ent_r * sum_w_r / sum_w
+            information_gain += ent_l * sum_w_l / sum_w
+        except:
+            print(sum_w)
+            print(sum_w_r)
+            print(sum_w_l)
+            print(ent_r)
+            print(ent_l)
+            exit()
         information_gain /= 2.
         information_gain -= entropy
 
-        return -information_gain
+        return information_gain
 
     bounds = [sl[0], sl[-1]]
     x0 = (sl[0] + sl[-1]) / 2.
+    x0 = sl[0]
     return result_dict, min_func, bounds, x0
 
 
@@ -87,6 +102,7 @@ class Node(object):
         self.path = path
         self.entropy = entropy
         self.sum_w = sum_w
+        print(sum_w)
         self.direction = direction
         if len(path) == 0:
             self.parent = -1
@@ -105,6 +121,7 @@ class Node(object):
                                               sample_weight,
                                               X_data,
                                               sample_weight_data)
+        print(self.must_be_terminal)
 
 
     def optimize(self,
@@ -142,10 +159,10 @@ class Node(object):
         min_samples_split = self.base_tree.min_samples_split
 
         if n_samples_term < min_samples_split:
-            return False
+            return True
         if frac_weight < min_weight_fraction_leaf:
-            return False
-        for feature_i in feature_list:
+            return True
+        for feature_i in feature_list[5:]:
 
             result_dict, min_func, bounds, x0 = init_min_func(X[:, feature_i],
                                                               y,
@@ -162,59 +179,55 @@ class Node(object):
                 cuts_done = None
             if cuts_done is None:
                 def accept_func(f_new, x_new, f_old, x_old):
-                    return np.logical_and(x_new < bounds[1], x_new > bounds[0])
+                    return np.logical_and(x_new[0] < bounds[1],
+                                          x_new[0] > bounds[0])
             else:
                 def accept_func(f_new, x_new, f_old, x_old):
-                    far_away = np.absolute(x_new - cuts_done) > resolution_i
-                    is_in_bounds = np.logical_and(x_new < bounds[1],
-                                                  x_new > bounds[0])
+                    far_away = np.absolute(x_new[0] - cuts_done) > resolution_i
+                    is_in_bounds = np.logical_and(x_new[0] < bounds[1],
+                                                  x_new[0] > bounds[0])
                     return np.logical_and(is_in_bounds, far_away)
             solution = basinhopping(func=min_func,
                                     x0=x0,
+                                    niter=1000,
                                     accept_test=accept_func)
-            print(solution)
-            print(result_dict)
-            exit()
 
+            split_i = solution.x[0]
+            information_gain = -solution.fun
+            split_mask = X[:, self.feature] < split_i
+            w_r = result_dict['sum_w_r']
+            w_l = result_dict['sum_w_l']
+            entropy_r = result_dict['ent_r']
+            entropy_l = result_dict['ent_l']
 
-            for i, split_i in enumerate(X_i):
-                if cuts_done is not None:
-                    if any(np.absolute(split_i - cuts_done) < resolution_i):
-                        continue
-                entropy_r, w_r, entropy_l, w_l = self.calc_entropies(
-                    y_i,
-                    sample_weight_i,
-                    i)
-
-                if X_data is not None:
-                    new_split_mask_data = X_data < split_i
-                    n_samples_l = np.sum(~new_split_mask_data)
-                    n_samples_r = np.sum(new_split_mask_data)
-                else:
-                    n_samples_l = len(X_i) - i
-                    n_samples_r = i
-                try:
-                    #  Check if the splits is valid
-                    min_gain = self.base_tree.min_information_gain_split
-                    assert information_gain > min_gain
-                    assert n_samples_l > self.base_tree.min_samples_leaf
-                    assert n_samples_r > self.base_tree.min_samples_leaf
-                except AssertionError:
-                    pass
-                else:
-                    if self.information_gain is None:
-                        self.information_gain = 0.
-                        self.must_be_terminal = False
-                    if information_gain > self.information_gain:
-                        self.feature = feature_i
-                        self.threshold = split_i
-                        self.information_gain = information_gain
-
-                        self.cache_l.entropy = entropy_l
-                        self.cache_r.entropy = entropy_r
-                        self.cache_l.sum_w = w_l
-                        self.cache_r.sum_w = w_r
-        if self.feature is not None:
+            if X_data is not None:
+                new_split_mask_data = X_data < split_i
+                n_samples_l = np.sum(~new_split_mask_data)
+                n_samples_r = np.sum(new_split_mask_data)
+            else:
+                n_samples_l = np.sum(split_mask)
+                n_samples_r = len(split_mask) - np.sum(split_mask)
+            try:
+                #  Check if the splits is valid
+                min_gain = self.base_tree.min_information_gain_split
+                assert information_gain > min_gain
+                assert n_samples_l > self.base_tree.min_samples_leaf
+                assert n_samples_r > self.base_tree.min_samples_leaf
+            except AssertionError:
+                pass
+            else:
+                if self.information_gain is None:
+                    self.information_gain = 0.
+                    self.must_be_terminal = False
+                if information_gain > self.information_gain:
+                    self.feature = feature_i
+                    self.threshold = split_i
+                    self.information_gain = information_gain
+                    self.cache_l.entropy = entropy_l
+                    self.cache_r.entropy = entropy_r
+                    self.cache_l.sum_w = w_l
+                    self.cache_r.sum_w = w_r
+        if self.feature != -2:
             split_mask = X[:, self.feature] < self.threshold
             self.cache_r.X = X[split_mask]
             self.cache_l.X = X[~split_mask]
@@ -230,9 +243,9 @@ class Node(object):
                 if sample_weight_data is not None:
                     self.cache_r.sample_weight_data = X[split_mask_data]
                     self.cache_l.sample_weight_data = X[~split_mask_data]
-            return True
-        else:
             return False
+        else:
+            return True
 
     def calc_entropies(self, y, sample_weight, i):
         y_r = y[:i]
@@ -283,7 +296,7 @@ class Node(object):
                     y=self.cache_l.y,
                     entropy=self.cache_l.entropy,
                     sum_w=self.cache_l.sum_w,
-                    sample_weight=self.cache_l.X,
+                    sample_weight=self.cache_l.sample_weight,
                     X_data=self.cache_l.X_data,
                     sample_weight_data=self.cache_l.sample_weight_data)
                 r_node = Node(
@@ -294,7 +307,7 @@ class Node(object):
                     y=self.cache_r.y,
                     entropy=self.cache_r.entropy,
                     sum_w=self.cache_r.sum_w,
-                    sample_weight=self.cache_r.X,
+                    sample_weight=self.cache_r.sample_weight,
                     X_data=self.cache_r.X_data,
                     sample_weight_data=self.cache_r.sample_weight_data)
             return l_node, r_node
@@ -303,6 +316,8 @@ class Node(object):
         if isinstance(partner, Node):
             if partner.information_gain is None:
                 return True
+            elif self.information_gain is None:
+                return False
             else:
                 return self.information_gain < partner.information_gain
         elif isinstance(partner, float):
@@ -440,6 +455,7 @@ class DiscretizationTree(object):
             current_depth += 1
             if len(node_list) == 0:
                 keep_building = False
+            print(self.feature)
 
 class TreeBinning(object):
     def __init__(self,

@@ -63,9 +63,22 @@ if __name__ == '__main__':
     binned_E_test = np.digitize(df_test.MCorsikaEvtHeader_fTotalEnergy,
                            binning_E)
 
+    tree_binning = discretization.TreeBinningSklearn()
+    tree_binning.fit(X_tree_test, binned_E_test)
+
+
+    print(tree_binning.tree.tree_.feature)
+    exit()
+
+
+
+
+
     tree_binning = discretization.TreeBinning()
-    import cProfile
-    cProfile.run('tree_binning.fit(X_tree_test, binned_E_test)')
+
+    tree_binning.fit(X_tree_test, binned_E_test)
+    #import cProfile
+    #cProfile.run('tree_binning.fit(X_tree_test, binned_E_test)')
 
     print(tree_binning.tree.feature)
     print(tree_binning.tree.threshold)
