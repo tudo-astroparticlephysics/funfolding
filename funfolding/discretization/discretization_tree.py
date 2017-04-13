@@ -1,6 +1,9 @@
 import numpy as np
 from scipy import stats
 import copy
+from scipy.optimize import minimize, minimize_scalar, basinhopping
+from sortedcontainers import SortedList
+
 
 class InfoCache:
     def __init__(self):
@@ -23,6 +26,49 @@ def f_entropy(y, sample_weight):
         return 0.0
     return ep
 
+
+
+
+def init_min_func(X, y, sample_weight, sum_w, entropy):
+    result_dict = {}
+    order = np.argsort(X)
+    sl = SortedList(X)
+    y_sorted = y[order]
+    if sample_weight is not None:
+        sample_weight_i = sample_weight[order]
+    else:
+        sample_weight_i = None
+
+    def min_func(split_i):
+        idx = sl.bisect(split_i)
+        y_r = y_sorted[idx:]
+        y_l =y_sorted[:idx]
+        if sample_weight_i is not None:
+            w_r = sample_weight_i[idx:]
+            w_l = sample_weight_i[:idx]
+            sum_w_r = np.sum(w_r)
+            sum_w_l = np.sum(w_l)
+        else:
+            w_r = None
+            w_l = None
+            sum_w_r = len(y_r)
+            sum_w_l = len(y_l)
+        ent_r = f_entropy(y_r, w_r)
+        ent_l = f_entropy(y_l, w_l)
+        result_dict['sum_w_r'] = sum_w_r
+        result_dict['sum_w_l'] = sum_w_l
+        result_dict['ent_r'] = ent_r
+        result_dict['ent_l'] = ent_l
+        information_gain = ent_r * sum_w_r / sum_w
+        information_gain += ent_l * sum_w_l / sum_w
+        information_gain /= 2.
+        information_gain -= entropy
+
+        return -information_gain
+
+    bounds = [sl[0], sl[-1]]
+    x0 = (sl[0] + sl[-1]) / 2.
+    return result_dict, min_func, bounds, x0
 
 
 class Node(object):
@@ -59,6 +105,7 @@ class Node(object):
                                               sample_weight,
                                               X_data,
                                               sample_weight_data)
+
 
     def optimize(self,
                  X,
@@ -99,13 +146,13 @@ class Node(object):
         if frac_weight < min_weight_fraction_leaf:
             return False
         for feature_i in feature_list:
-            order = np.argsort(X[:, feature_i])
-            X_i = X[order, feature_i]
-            y_i = y[order]
-            if sample_weight is not None:
-                sample_weight_i = sample_weight[order]
-            else:
-                sample_weight_i = None
+
+            result_dict, min_func, bounds, x0 = init_min_func(X[:, feature_i],
+                                                              y,
+                                                              sample_weight,
+                                                              self.sum_w,
+                                                              self.entropy)
+
             resolution_i = self.base_tree.resolution.get(feature_i, None)
             if resolution_i is not None:
                 feature_idx = np.where(self.base_tree.feature == feature_i)[0]
@@ -113,6 +160,22 @@ class Node(object):
                                       for idx in feature_idx])
             else:
                 cuts_done = None
+            if cuts_done is None:
+                def accept_func(f_new, x_new, f_old, x_old):
+                    return np.logical_and(x_new < bounds[1], x_new > bounds[0])
+            else:
+                def accept_func(f_new, x_new, f_old, x_old):
+                    far_away = np.absolute(x_new - cuts_done) > resolution_i
+                    is_in_bounds = np.logical_and(x_new < bounds[1],
+                                                  x_new > bounds[0])
+                    return np.logical_and(is_in_bounds, far_away)
+            solution = basinhopping(func=min_func,
+                                    x0=x0,
+                                    accept_test=accept_func)
+            print(solution)
+            print(result_dict)
+            exit()
+
 
             for i, split_i in enumerate(X_i):
                 if cuts_done is not None:
@@ -122,10 +185,7 @@ class Node(object):
                     y_i,
                     sample_weight_i,
                     i)
-                information_gain = entropy_r * w_r / self.sum_w
-                information_gain += entropy_l * w_l / self.sum_w
-                information_gain /= 2.
-                information_gain -= self.entropy
+
                 if X_data is not None:
                     new_split_mask_data = X_data < split_i
                     n_samples_l = np.sum(~new_split_mask_data)
