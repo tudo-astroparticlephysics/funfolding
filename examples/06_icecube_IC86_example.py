@@ -13,6 +13,8 @@ if __name__ == '__main__':
 
     n_test = int(len(df) / 10)
 
+    print(n_test)
+
     df_A = df.iloc[n_test:]
     df_test = df.iloc[:n_test]
 
@@ -106,21 +108,27 @@ if __name__ == '__main__':
     binned_g_test = tree_binning.digitize(X_test)
     vec_g, vec_f = tree_model.generate_vectors(binned_g_test,
                                                binned_E_test)
+    print(vec_f)
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
-    llh_mcmc = solution.LLHSolutionMCMC(n_used_steps=2000,
+    llh_mcmc = solution.LLHSolutionMCMC(n_used_steps=4000,
                                         random_state=1337)
     llh_mcmc.initialize(vec_g=vec_g, model=tree_model)
-    vec_f_est_mcmc, sample, probs = llh_mcmc.run(tau=0.000002)
+    tau = 0.00002
+    vec_f_est_mcmc, sample, probs = llh_mcmc.run(tau=tau)
+    llh_sol = solution.LLHSolutionMinimizer()
+    llh_sol.initialize(vec_g=vec_g, model=tree_model, bounds=True)
+    solution, V_f_est = llh_sol.run(tau=tau, x0=vec_f_est_mcmc)
+    vec_f_est_mini = solution.x
     std = np.std(sample, axis=0)
-    quantiles = np.percentile(sample, [0.16, 0.84], axis=0)
+    quantiles = np.percentile(sample, [16, 84], axis=0)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
-    print(quantiles)
 
-    corner.corner(sample, truths=vec_f_est_mcmc, truth_color='r')
+
+    corner.corner(sample, truths=vec_f_est_mini, truth_color='r')
     plt.savefig('06_corner_icecube.png')
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 4))
@@ -136,6 +144,20 @@ if __name__ == '__main__':
                 xerr=bin_width,
                 ls="",
                 color="r", label="Unfolding")
+    print(solution)
+    print(vec_f_est_mini)
+    print(quantiles[0, :])
+    print(quantiles[1, :])
+    quantiles[0, :] = vec_f_est_mini -quantiles[0, :]
+    quantiles[1, :] = quantiles[1, :] - vec_f_est_mini
+    print(quantiles)
+    ax.errorbar(bin_mids,
+                vec_f_est_mini,
+                yerr=quantiles,
+                xerr=bin_width,
+                ls="",
+                color="g", label="Hybrid")
+    plt.legend(loc='best')
     ax.set_yscale("log", nonposy='clip')
     fig.savefig('06_unfolding_mcmc.png')
 
