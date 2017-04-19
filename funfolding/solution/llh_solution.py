@@ -37,14 +37,15 @@ class LLHThikonov:
         self.N_prior = True
 
     def evaluate_llh(self, f):
-        g_est, f = self.linear_model.evaluate(f)
+        g_est, f, f_reg = self.linear_model.evaluate(f)
         if any(g_est < 0) or any(f < 0):
             if self.neg_llh:
                 return np.inf
             else:
                 return -np.inf
         poisson_part = np.sum(g_est - self.g * np.log(g_est))
-        regularization_part = 0.5 * self.tau * np.dot(np.dot(f.T, self.C), f)
+        regularization_part = 0.5 * self.tau * np.dot(
+            np.dot(f_reg.T, self.C), f_reg)
         if self.N_prior:
             sum_f = np.sum(f)
             regularization_part += sum_f - self.N * np.log(sum_f)
@@ -54,19 +55,19 @@ class LLHThikonov:
             return (poisson_part + regularization_part) * (-1)
 
     def evaluate_gradient(self, f):
-        g_est, f = self.linear_model.evaluate(f)
+        g_est, f, f_reg = self.linear_model.evaluate(f)
         h_unreg = np.sum(self.linear_model.A, axis=0)
         part_b = np.sum(self.linear_model.A.T * self.g * (1 / g_est), axis=1)
         h_unreg -= part_b
         regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
-            self.C, f)
+            self.C, f_reg)
         if self.neg_llh:
             return h_unreg + regularization_part
         else:
             return (h_unreg + regularization_part) * (-1)
 
     def evaluate_hesse_matrix(self, f):
-        g_est, f = self.linear_model.evaluate(f)
+        g_est, f, f_reg = self.linear_model.evaluate(f)
         H_unreg = np.dot(np.dot(self.linear_model.A.T,
                                 np.diag(self.g / g_est**2)),
                          self.linear_model.A)
@@ -233,6 +234,7 @@ class LLHSolutionMCMC(Solution):
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
         sampler = self.__initiallize_mcmc__()
         vec_f, samples, probs = self.__run_mcmc__(sampler, pos_x0, n_steps)
+
         return vec_f, samples, probs
 
     def __initiallize_mcmc__(self):
@@ -245,12 +247,14 @@ class LLHSolutionMCMC(Solution):
         sampler.run_mcmc(pos0=x0,
                          N=n_steps,
                          rstate0=self.random_state)
+        print(sampler.chain.shape)
         samples = sampler.chain[:, self.n_burn_steps:, :]
         samples = samples.reshape((-1, self.n_dims_f))
 
         probs = sampler.lnprobability[:, self.n_burn_steps:]
         probs = probs.reshape((-1))
         idx_max = np.argmax(probs)
+        samples = self.model.transform(samples)
         return samples[idx_max, :], samples, probs
 
 

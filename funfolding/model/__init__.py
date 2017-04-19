@@ -1,4 +1,4 @@
-from .linear_model import BasicLinearModel, SphericalLinearModel, LinearModel
+from .linear_model import BasicLinearModel, MCBiasLinearModel, LinearModel
 
 
-__all__ = ['BasicLinearModel', 'SphericalLinearModel', 'LinearModel']
+__all__ = ['BasicLinearModel', 'MCBiasLinearModel', 'LinearModel']

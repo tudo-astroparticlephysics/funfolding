@@ -43,11 +43,15 @@ class LinearModel:
         if self.status < 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
-        return np.dot(self.A, f), f
+        return np.dot(self.A, f), f, f
 
     def set_x0(self, x0=None):
         self.logger.debug('Setup of x0!')
         return x0
+
+    def transform(self, f):
+        self.logger.debug('Transforming f!')
+        return f
 
 
 class BasicLinearModel(LinearModel):
@@ -124,6 +128,35 @@ class BasicLinearModel(LinearModel):
                 label=label)
         ax.set_xlim([binning[0], binning[-1]])
         return ax
+
+
+class MCBiasLinearModel(BasicLinearModel):
+    name = 'MCBiasLinearModel'
+
+    def __init__(self):
+        super(MCBiasLinearModel, self).__init__()
+        self._vec_f_MC = None
+        self.correction = 1.
+
+    @property
+    def vec_f_MC(self):
+        return self._vec_f_MC
+
+    @vec_f_MC.setter
+    def vec_f_MC(self, value):
+        self._vec_f_MC = value
+
+    def evaluate(self, f_0):
+        f = self.vec_f_MC * f_0 * self.correction
+        g, f, _ = super(MCBiasLinearModel, self).evaluate(f)
+        return g, f, f_0
+
+    def generate_x0(self, vec_g):
+        self.correction = np.sum(vec_g) / np.sum(self._vec_f_MC)
+        return np.ones_like(self._vec_f_MC)
+
+    def transform(self, f_0):
+        return f_0 * self._vec_f_MC
 
 
 class SphericalLinearModel(BasicLinearModel):
