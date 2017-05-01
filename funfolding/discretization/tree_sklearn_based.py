@@ -4,6 +4,8 @@ import numpy as np
 import copy
 
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
+
 
 
 logger = logging.getLogger('TreeBinningSklearn')
@@ -71,6 +73,9 @@ class TreeBinningSklearn(object):
                  max_depth=None,
                  min_samples_leaf=1,
                  max_leaf_nodes=None,
+                 boosted=None,
+                 n_estimators=50,
+                 learning_rate=1.0,
                  random_state=None):
 
         if not isinstance(random_state, np.random.RandomState):
@@ -85,6 +90,20 @@ class TreeBinningSklearn(object):
                 max_leaf_nodes=max_leaf_nodes,
                 max_features=max_features,
                 random_state=random_state)
+            if boosted in ['linear', 'square', 'exponential']:
+                self.boosted = AdaBoostRegressor(
+                    base_estimator=self.tree,
+                    n_estimators=n_estimators,
+                    learning_rate=learning_rate,
+                    algorithm=boosted,
+                    random_state=random_state)
+            elif boosted is not None:
+                raise ValueError(
+                    '\'boosted\' should be None for no boosting '
+                    'or either \'linear\', \'square\', \'exponential\' for a '
+                    'boosted regression.')
+            else:
+                self.boosted = None
         else:
             self.tree = DecisionTreeClassifier(
                 max_depth=max_depth,
@@ -93,9 +112,22 @@ class TreeBinningSklearn(object):
                 max_leaf_nodes=max_leaf_nodes,
                 max_features=max_features,
                 random_state=random_state)
+            if boosted in ['SAMME', 'SAMME.R']:
+                self.boosted = AdaBoostClassifier(
+                    base_estimator=self.tree,
+                    n_estimators=n_estimators,
+                    learning_rate=learning_rate,
+                    algorithm=boosted,
+                    random_state=random_state)
+            elif boosted is not None:
+                raise ValueError(
+                    '\'boosted\' should be None for no boosting '
+                    'or either \'SAMME\' or \'SAMME.R\' for a '
+                    'boosted classification.')
+            else:
+                self.boosted = None
         self.leaf_idx_mapping = None
         self.n_bins = None
-
 
     def fit(self,
             X,
@@ -108,9 +140,16 @@ class TreeBinningSklearn(object):
             mask = __sample_uniform__(y, sample_weight=sample_weight)
             y = y[mask]
             X = X[mask]
-        self.tree.fit(X=X,
-                      y=y,
-                      sample_weight=sample_weight)
+        if self.boosted is not None:
+            self.boosted.fit(X=X,
+                             y=y,
+                             sample_weight=sample_weight)
+            best_tree_idx = np.argmax(self.boosted.estimator_weights_)
+            self.tree = self.boosted.estimators_[best_tree_idx]
+        else:
+            self.tree.fit(X=X,
+                          y=y,
+                          sample_weight=sample_weight)
         self.leaf_idx_mapping = {}
         is_leaf = np.where(self.tree.tree_.feature == -2)[0]
         counter = 0
