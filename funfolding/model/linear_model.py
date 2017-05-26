@@ -24,7 +24,7 @@ def ct_r(f):
     return f_spherical, N
 
 
-class LinearModel:
+class LinearModel(object):
     name = 'LinearModel'
 
     def __init__(self):

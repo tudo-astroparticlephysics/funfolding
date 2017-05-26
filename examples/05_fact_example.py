@@ -185,7 +185,7 @@ if __name__ == '__main__':
     # corner.corner(sample, truths=vec_f_est_mcmc, truth_color='r')
     # plt.savefig('05_corner_fact.png')
 
-    fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
     bin_mids = (binning_E[1:] + binning_E[:-1]) / 2.
     bin_width = (binning_E[1:] - binning_E[:-1]) / 2.
     _, vec_f_truth = tree_model.generate_vectors(binned_g,
@@ -200,3 +200,20 @@ if __name__ == '__main__':
                 color="r", label="Unfolding")
     ax.set_yscale("log", nonposy='clip')
     fig.savefig('05_unfolding_mcmc.png')
+    plt.close(fig)
+
+    import cPickle
+
+    with open('probs.dat', 'wb') as f:
+        cPickle.dump(probs, f)
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
+    ax.hist(2*(np.max(probs) - probs),
+            bins=50,
+            weights=np.ones_like(probs) * 1./len(probs),
+            histtype='step', lw=2)
+    ax.set_yscale("log", nonposy='clip')
+    ax.set_xlabel(r'$-2\cdot\ln\left(\frac{\mathdefault{LLH}}{\mathdefault{LLH}_{\mathdefault{Best Fit}}}\right)$')
+    ax.set_ylabel(r'$\frac{\mathdefault{Bin}_i}{\sum_i \mathdefault{Bin}_i}$')
+    plt.tight_layout()
+    plt.savefig('05_hist_probs.png')
