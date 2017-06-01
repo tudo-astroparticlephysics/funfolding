@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 
-class Discretization:
+class Discretization(object):
     name = 'Discretization'
 
     def __init__(self):
