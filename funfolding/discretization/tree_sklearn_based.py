@@ -76,6 +76,7 @@ class TreeBinningSklearn(object):
                  boosted=None,
                  n_estimators=50,
                  learning_rate=1.0,
+                 ensemble_select='best',
                  random_state=None):
 
         if not isinstance(random_state, np.random.RandomState):
@@ -97,6 +98,7 @@ class TreeBinningSklearn(object):
                     learning_rate=learning_rate,
                     algorithm=boosted,
                     random_state=random_state)
+
             elif boosted is not None:
                 raise ValueError(
                     '\'boosted\' should be None for no boosting '
@@ -126,6 +128,7 @@ class TreeBinningSklearn(object):
                     'boosted classification.')
             else:
                 self.boosted = None
+        self.ensemble_select = ensemble_select.lower()
         self.leaf_idx_mapping = None
         self.n_bins = None
 
@@ -141,11 +144,18 @@ class TreeBinningSklearn(object):
             y = y[mask]
             X = X[mask]
         if self.boosted is not None:
+            if self.ensemble_select.lower() not in ['best', 'last']:
+                raise ValueError(
+                    '\'ensemble_select\' must be \'best\' or \'last\'!')
             self.boosted.fit(X=X,
                              y=y,
                              sample_weight=sample_weight)
-            best_tree_idx = np.argmax(self.boosted.estimator_weights_)
-            self.tree = self.boosted.estimators_[best_tree_idx]
+            if self.ensemble_select == 'best':
+                tree_idx = np.argmax(self.boosted.estimator_weights_)
+
+            elif self.ensemble_select == 'last':
+                tree_idx = -1
+            self.tree = self.boosted.estimators_[tree_idx]
         else:
             self.tree.fit(X=X,
                           y=y,

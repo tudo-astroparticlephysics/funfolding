@@ -34,17 +34,12 @@ if __name__ == '__main__':
         'HitStatisticsValues.cog_x',
         'HitStatisticsValues.cog_y',
         'HitStatisticsValues.cog_z',
-        'MuEXAngular4.z',
-        'MuEXAngular4.zenith',
-        'MuEXAngular4.azimuth',
         'MuEXAngular4_Sigma.value',
         'SPEFit2BayesianFitParams.logl',
         'SPEFit2BayesianFitParams.rlogl',
         'SPEFit2_TTFitParams.logl',
         'SPEFit2_TTFitParams.rlogl',
         'SplineMPE.z',
-        'SplineMPE.zenith',
-        'SplineMPE.azimuth',
         'SplineMPECharacteristics.avg_dom_dist_q_tot_dom',
         'SplineMPECharacteristics.empty_hits_track_length',
         'SplineMPECharacteristics.track_hits_separation_length',
@@ -60,8 +55,6 @@ if __name__ == '__main__':
         'SplineMPEFitParams.logl',
         'SplineMPEFitParams.rlogl',
         'SplineMPEMuEXDifferential.z',
-        'SplineMPEMuEXDifferential.zenith',
-        'SplineMPEMuEXDifferential.azimuth',
         'SplineMPEMuEXDifferential.energy',
         'SplineMPEMuEXDifferential_r.value',
         'SplineMPETruncatedEnergy_SPICEMie_AllBINS_MuEres.value',
@@ -69,10 +62,16 @@ if __name__ == '__main__':
         'SplineMPETruncatedEnergy_SPICEMie_AllDOMS_MuEres.value',
         'SplineMPETruncatedEnergy_SPICEMie_AllDOMS_Muon.energy']
 
-    X_A = df_A.get(unfolding_cols)
+    classic_cols = ['SplineMPEMuEXDifferential.energy',
+                    'SplineMPEDirectHitsC.n_dir_doms',
+                    'SplineMPEDirectHitsC.dir_track_length']
+
+    X_A_clf = df_A.get(unfolding_cols)
+    X_A_classic = df_A.get(classic_cols)
     y_A = df_A.get('MCPrimary1.energy')
 
-    X_test = df_test.get(unfolding_cols)
+    X_test_clf = df_test.get(unfolding_cols)
+    X_teset_classic = df_A.get(classic_cols)
     y_test = df_test.get('MCPrimary1.energy')
 
     binning_E = np.linspace(2.0, 5.0, 11)
@@ -80,7 +79,7 @@ if __name__ == '__main__':
     binned_E_A = np.digitize(y_A, binning_E)
     binned_E_test = np.digitize(y_test, binning_E)
 
-    tree_binning = discretization.TreeBinningSklearn(
+    tree_binning_uniform = discretization.TreeBinningSklearn(
         regression=False,
         max_features=None,
         min_samples_split=2,
@@ -89,20 +88,50 @@ if __name__ == '__main__':
         max_leaf_nodes=100,
         random_state=1337)
 
-    tree_binning.fit(X_A,
-                     binned_E_A,
-                     uniform=True)
+    tree_binning_uniform.fit(
+        X_A_clf,
+        binned_E_A,
+        uniform=True)
 
-    binned_g_A = tree_binning.digitize(X_A)
+    binned_g_test = tree_binning_uniform.digitize(X_test_clf)
 
-    tree_model = model.BasicLinearModel()
-    tree_model.initialize(g=binned_g_A,
-                          f=binned_E_A)
+    tree_binning_uniform_model = model.BasicLinearModel()
+    tree_binning_uniform_model.initialize(
+        g=binned_g_test,
+        f=binned_E_test)
 
-    ax_condition = tree_model.evaluate_condition(
-        label='Tree Binning'.format(
-            tree_binning.n_bins))
+    boosted_binning_uniform = discretization.TreeBinningSklearn(
+        regression=False,
+        max_features=None,
+        min_samples_split=2,
+        max_depth=None,
+        min_samples_leaf=100,
+        max_leaf_nodes=100,
+        random_state=1337,
+        boosted='SAMME.R')
+
+    boosted_binning_uniform.fit(
+        X_A_clf,
+        binned_E_A,
+        uniform=True)
+
+    binned_g_test = boosted_binning_uniform.digitize(X_test_clf)
+
+    boosted_binning_uniform_model = model.BasicLinearModel()
+    boosted_binning_uniform_model.initialize(
+        g=binned_g_test,
+        f=binned_E_test)
+
+    print('ASASFA')
+
+    ax_condition = tree_binning_uniform_model.evaluate_condition(
+        label='Tree Binning (Uniform)')
+    ax_condition = boosted_binning_uniform_model.evaluate_condition(
+        ax=ax_condition,
+        label='Boosted Binning (Uniform)')
+
     ax_condition.set_yscale("log", nonposy='clip')
+    print('CONDICTION')
     plt.savefig('06_condition.png')
 
     binned_g_test = tree_binning.digitize(X_test)
