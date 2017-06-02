@@ -1,7 +1,6 @@
 import logging
 import numpy as np
 from scipy import linalg
-from matplotlib import pyplot as plt
 
 
 class Model:
@@ -31,6 +30,7 @@ class Model:
         self.logger = logging.getLogger(self.name)
         self.logger.debug('Created {}'.format(self.name))
         self.status = -1
+        self.has_background = False
 
     def initialize(self):
         """This function should be called with all needed values. To actually
@@ -54,8 +54,8 @@ class Model:
                                "Run 'model.initialize' first!")
         if self.status < 1 and self.status_need_for_eval == 1:
             raise RuntimeError("Model has to be intilized and x0 has to be"
-                                "set. Run 'model.initialize' and "
-                                "'model.set_x0' first!")
+                               "set. Run 'model.initialize' and "
+                               "'model.set_x0' first!")
 
     def set_model_x0(self):
         """Some models need to be set up with a x0 for the model. For those .
@@ -77,8 +77,8 @@ class Model:
                                "Run 'model.initialize' first!")
         if self.status < 1 and self.status_need_for_eval == 1:
             raise RuntimeError("Model has to be intilized and x0 has to be"
-                                "set. Run 'model.initialize' and "
-                                "'model.set_x0' first!")
+                               "set. Run 'model.initialize' and "
+                               "'model.set_x0' first!")
 
     def generate_fit_bounds(self):
         """The model should be able to return resonable bounds for the fitter.
@@ -89,8 +89,19 @@ class Model:
                                "Run 'model.initialize' first!")
         if self.status < 1 and self.status_need_for_eval == 1:
             raise RuntimeError("Model has to be intilized and x0 has to be"
-                                "set. Run 'model.initialize' and "
-                                "'model.set_x0' first!")
+                               "set. Run 'model.initialize' and "
+                               "'model.set_x0' first!")
+
+    def add_background(self):
+        self.logger.debug('\tAdded background vector!')
+        self.has_background = True
+
+    def remove_background(self):
+        """Disables the background vector. A stored background vector is
+        not deleted.
+        """
+        self.logger.debug('\tRemoved background vector!')
+        self.has_background = False
 
 
 class BasicLinearModel(Model):
@@ -131,10 +142,15 @@ class BasicLinearModel(Model):
 
     A : numpy.array shape=(dim_g, dim_f)
         Response matrix.
+
+    b : numpy.array, shape=(dim_f)
+        Observable vector for the background.
+
+    has_background : boolean
+        Indicator if self.vec_b should be added to the model evaluationg
+
+
     """
-
-
-
     def __init__(self):
         super(BasicLinearModel, self).__init__()
         self.range_obs = None
@@ -142,6 +158,7 @@ class BasicLinearModel(Model):
         self.A = None
         self.dim_f = None
         self.dim_g = None
+        self.vec_b = None
 
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
         """
@@ -151,7 +168,7 @@ class BasicLinearModel(Model):
         self.range_obs = (min(digitized_obs), max(digitized_obs))
         self.range_truth = (min(digitized_truth), max(digitized_truth))
         self.dim_f = self.range_obs[1] - self.range_obs[0] + 1
-        self.dim_g =  self.range_truth[1] - self.range_truth[0] + 1
+        self.dim_g = self.range_truth[1] - self.range_truth[0] + 1
         binning_g, binning_f = self.__generate_binning__()
         self.A = np.histogram2d(x=digitized_obs,
                                 y=digitized_truth,
@@ -160,52 +177,111 @@ class BasicLinearModel(Model):
         M_norm = np.diag(1 / np.sum(self.A, axis=0))
         self.A = np.dot(self.A, M_norm)
 
-    def evaluate(self, f):
+    def evaluate(self, vec_f):
+        """Evaluating the model for a given vector f
+
+        Parameters
+        ----------
+        vec_f : numpy.array, shape=(dim_f,)
+            Vector f for which the model should be evaluated.
+
+        Returns
+        -------
+        vec_g : nump.array, shape=(dim_g,)
+            Vector containing the number of events in observable space.
+            If background was added the returned vector is A * vec_f + vec_b.
+
+        vec_f : nump.array, shape=(dim_f,)
+            Vector used to evaluate A * vec_f
+
+        vec_f_reg : nump.array, shape=(dim_f,)
+            Vector that should be passed to the regularization. For the
+            BasisLinearModel it is identical to f.
+        """
         super(BasicLinearModel, self).evaluate()
-        return np.dot(self.A, f), f, f
+        vec_g = np.dot(self.A, vec_f)
+        if self.has_background:
+            vec_g += self.vec_b
+        return vec_g, vec_f, vec_f
 
     def generate_fit_x0(self, vec_g):
+        """Generates a default seed for the minimization.
+        The default seed vec_f_0 is a uniform distribution with
+        sum(vec_f_0) = sum(vec_g). If background is present the default seed
+        is: sum(vec_f_0) = sum(vec_g) - sum(self.vec_b).
+
+        Parameters
+        ----------
+        vec_g : np.array, shape=(dim_g)
+            Observable vector which should be used to get the correct
+            normalization for vec_f_0.
+
+        Returns
+        -------
+        vec_f_0 : np.array, shape=(dim_f)
+            Seed vector of a minimization.
+        """
         super(BasicLinearModel, self).generate_fit_x0()
         n = self.A.shape[1]
-        return np.ones(n) * np.sum(vec_g) / n
+        if self.has_background:
+            vec_f_0 = np.ones(n) * (np.sum(vec_g) - sum(self.vec_b)) / n
+        else:
+            vec_f_0 = np.ones(n) * np.sum(vec_g) / n
+        return vec_f_0
 
     def generate_fit_bounds(self, vec_g):
+        """Generates a bounds for a minimization.
+        The bounds are (0, sum(vec_g)) without background and
+        (0, sum(vec_g - self.vec_b)) with background. The bounds are for
+        each fit parameter/entry in f.
+
+        Parameters
+        ----------
+        vec_g : np.array, shape=(dim_g)
+            Observable vector which should be used to get the correct
+            upper bound
+
+        Returns
+        -------
+        bounds : list, shape=(dim_f)
+            List of tuples with the bounds.
+        """
         super(BasicLinearModel, self).generate_fit_bounds()
         n = self.A.shape[1]
-        n_events = np.sum(vec_g)
-        bounds = []
-        for i in range(n):
-            bounds.append((0, n_events))
+        if self.has_background:
+            n_events = np.sum(vec_g) - sum(self.vec_b)
+        else:
+            n_events = np.sum(vec_g)
+        bounds = [(0, n_events)] * n
         return bounds
 
     def set_model_x0(self):
+        """The BasicLinearModel has no referenz model_x0.
+        """
         super(BasicLinearModel, self).set_model_x0()
         self.logger.info('\tx0 has no effect for {}'.format(self.name))
 
+    def evaluate_condition(self, normalize=True):
+        """Returns an ordered array of the singular values of matrix A.
 
-    def evaluate_condition(self, ax=None, label='Linear Model'):
+        Parameters
+        ----------
+        normalize : boolean (optional)
+            If True the singular values return relativ to the largest
+            value.
+
+        Returns
+        -------
+        S_values : np.array, shape=(dim_f)
+            Ordered array of the singular values.
+        """
         self.logger.debug('Evaluation of Singular Values!')
         if self.status < 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
         U, S_values, V = linalg.svd(self.A)
-        if ax is None:
-            _, ax = plt.subplots()
-        ax.set_xlabel(r'Index $j$')
-        ax.set_ylabel(r'Normed Singular Values $\frac{\lambda_i}{\lambda_0}$')
-
         S_values = S_values / S_values[0]
-        binning = np.linspace(-0.5,
-                              len(S_values) - 0.5,
-                              len(S_values) + 1)
-        x_pos = np.arange(len(S_values))
-        ax.hist(x_pos,
-                bins=binning,
-                weights=S_values,
-                histtype='step',
-                label=label)
-        ax.set_xlim([binning[0], binning[-1]])
-        return ax
+        return S_values
 
     def __generate_binning__(self):
         self.logger.debug('\t\tGenerating binning vectors!')
@@ -213,21 +289,53 @@ class BasicLinearModel(Model):
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
         binning_obs = np.linspace(self.range_obs[0],
-                                  self.range_obs[1] +1 ,
+                                  self.range_obs[1] + 1,
                                   self.dim_g + 1)
         binning_truth = np.linspace(self.range_truth[0],
-                                  self.range_truth[1] +1 ,
-                                  self.dim_f + 1)
+                                    self.range_truth[1] + 1,
+                                    self.dim_f + 1)
         return binning_obs, binning_truth
 
-    def generate_vectors(self, g=None, f=None):
-        binning_g, binning_f = self.__generate_binning__()
-        if g is not None:
-            vec_g = np.histogram(g, bins=binning_g)[0]
+    def generate_vectors(self, digitized_obs=None, digitized_truth=None):
+        """Returns vec_g, vec_f for digitized values. Either f, g or both
+        can be provided to the function.
+
+        Parameters
+        ----------
+        digitized_obs : np.intarray (optional)
+            Array with digitized values form the observable space
+
+        digitized_truth : np.intarray (optinal)
+            Array with digitized values for the sought-after quantity.
+
+        Returns
+        -------
+        vec_g : None or np.array shape=(dim_g)
+            None if no digitized_obs was provided otherwise the histrogram
+            of digitized_obs.
+
+        vec_f : None or np.array shape=(dim_f)
+            None if no digitized_truth was provided otherwise the histrogram
+            of digitized_truth.
+        """
+        binning_obs, binning_truth = self.__generate_binning__()
+        if digitized_obs is not None:
+            vec_g = np.histogram(digitized_obs, bins=binning_obs)[0]
         else:
             vec_g = None
-        if f is not None:
-            vec_f = np.histogram(f, bins=binning_f)[0]
+        if digitized_truth is not None:
+            vec_f = np.histogram(digitized_truth, bins=binning_truth)[0]
         else:
             vec_f = None
         return vec_g, vec_f
+
+    def add_background(self, vec_b):
+        """Adds a background vector to the model.
+
+        Parameters
+        ----------
+        vec_b : numpy.array, shape=(dim_g)
+            Vector g which is added to the model evaluation.
+        """
+        super(BasicLinearModel, self).add_background()
+        self.vec_b = vec_b
