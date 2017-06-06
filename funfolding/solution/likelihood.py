@@ -79,10 +79,10 @@ class StandardLLH(LLH):
         self.vec_g = vec_g
         self.N = np.sum(vec_g)
         self.C = None
-        if isinstance(str, C):
-            if C.lower() == 'thikonov':
+        if isinstance(C, str):
+            if C.lower() == 'thikonov' or C.lower() == '2':
                 self.C = create_C_thikonov(model.dim_f)
-        elif isinstance(int, C):
+        elif isinstance(C, int):
             if C == 2:
                 self.C = create_C_thikonov(model.dim_f)
         if self.C is None:
@@ -107,11 +107,8 @@ class StandardLLH(LLH):
         super(StandardLLH, self).evaluate_llh()
         g_est, f, f_reg = self.model.evaluate(f)
         if any(g_est < 0) or any(f < 0):
-            if self.neg_llh:
-                return np.inf
-            else:
-                return -np.inf
-        poisson_part = np.sum(g_est - self.g * np.log(g_est))
+            return np.inf * self.factor
+        poisson_part = np.sum(g_est - self.vec_g * np.log(g_est))
         regularization_part = 0.5 * self.tau * np.dot(
             np.dot(f_reg.T, self.C), f_reg)
         return (poisson_part + regularization_part) * self.factor
@@ -120,7 +117,7 @@ class StandardLLH(LLH):
         super(StandardLLH, self).evaluate_gradient()
         g_est, f, f_reg = self.model.evaluate(f)
         h_unreg = np.sum(self.model.A, axis=0)
-        part_b = np.sum(self.model.A.T * self.g * (1 / g_est), axis=1)
+        part_b = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
         h_unreg -= part_b
         regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
             self.C, f_reg)
@@ -130,7 +127,7 @@ class StandardLLH(LLH):
         super(StandardLLH, self).evaluate_hesse_matrix()
         g_est, f, f_reg = self.model.evaluate(f)
         H_unreg = np.dot(np.dot(self.model.A.T,
-                                np.diag(self.g / g_est**2)),
+                                np.diag(self.vec_g / g_est**2)),
                          self.model.A)
         return ((self.tau * self.C) + H_unreg) * self.factor
 

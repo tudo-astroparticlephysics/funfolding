@@ -165,8 +165,8 @@ class LinearModel(Model):
         super(LinearModel, self).initialize()
         self.range_obs = (min(digitized_obs), max(digitized_obs))
         self.range_truth = (min(digitized_truth), max(digitized_truth))
-        self.dim_f = self.range_obs[1] - self.range_obs[0] + 1
-        self.dim_g = self.range_truth[1] - self.range_truth[0] + 1
+        self.dim_f = self.range_truth[1] - self.range_truth[0] + 1
+        self.dim_g = self.range_obs[1] - self.range_obs[0] + 1
         binning_g, binning_f = self.__generate_binning__()
         self.A = np.histogram2d(x=digitized_obs,
                                 y=digitized_truth,
@@ -427,8 +427,7 @@ class BiasedLinearModel(LinearModel):
             Vector that should be passed to the regularization. For the
             BasisLinearModel it is identical to f.
         """
-        eff_factor = self.model_factor_ - self.background_factor_
-        vec_f = self.model_x0 * vec_fit * eff_factor
+        vec_f = self.transform_vec_fit(vec_fit)
         vec_g, _, _ = super(BiasedLinearModel, self).evaluate(vec_f)
         return vec_g, vec_f, vec_fit
 

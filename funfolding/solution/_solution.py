@@ -56,12 +56,14 @@ class SVDSolution(Solution):
         super(SVDSolution, self).initialize()
         if not isinstance(model, LinearModel):
             raise ValueError("'model' has to be of type LinearModel!")
+        self.vec_g = vec_g
+        self.model = model
         if tau is None:
             self.tau = np.ones(model.dim_f)
         elif isinstance(tau, int):
-            if tau >= model.dim_f:
+            if tau > model.dim_f:
                 self.logger.warn('Number of used singular values is '
-                                 'greater equal to the total number of '
+                                 'greater than the total number of '
                                  'singular values. The solution will be '
                                  'unregularized!')
                 self.tau = np.ones(model.dim_f)
@@ -78,7 +80,9 @@ class SVDSolution(Solution):
         A = self.model.A
         U, S_values, V = linalg.svd(A)
         order = np.argsort(S_values)[::-1]
-        S_inv = np.diag(1 / S_values[order] * self.tau)
+        S_inv = np.zeros((self.model.dim_f, self.model.dim_g))
+        for i, idx in enumerate(order):
+            S_inv[i, i] = 1. / np.real(S_values[idx]) * self.tau[i]
         A_inv = np.dot(V.T, np.dot(S_inv, U.T))
         vec_f = np.dot(self.vec_g, A_inv.T)
         vec_f = np.real(vec_f)
@@ -144,6 +148,7 @@ class LLHSolutionMinimizer(Solution):
 
 class LLHSolutionMCMC(Solution):
     name = 'LLHSolutionMCMC'
+    status_need_for_fit = 1
 
     def __init__(self,
                  n_walker=100,
@@ -154,29 +159,35 @@ class LLHSolutionMCMC(Solution):
         super(LLHSolutionMCMC, self).__init__()
         if not isinstance(random_state, np.random.RandomState):
             random_state = np.random.RandomState(random_state)
+        self.random_state = random_state
+
         self.n_walker = n_walker
         self.n_used_steps = n_used_steps
         self.n_burn_steps = n_burn_steps
         self.n_threads = n_threads
 
+        self.x0 = None
+
     def initialize(self, model, llh):
-        super(LLHSolutionMinimizer, self).initialize()
+        super(LLHSolutionMCMC, self).initialize()
         self.llh = llh
         self.vec_g = llh.vec_g
         self.model = model
 
+
+
     def set_x0_and_bounds(self, x0=None, bounds=False):
-        super(LLHSolutionMinimizer, self).set_x0_and_bounds()
+        super(LLHSolutionMCMC, self).set_x0_and_bounds()
         if x0 is None:
             x0 = self.model.generate_fit_x0(self.vec_g)
         self.x0 = x0
         if bounds is not None and bounds:
             self.logger.warn("'bounds' have no effect or MCMC!")
 
-    def fit(self, tau=None, x0=None):
+    def fit(self):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
-        pos_x0 = np.zeros((self.n_walker, self.n_dims_f), dtype=float)
+        pos_x0 = np.zeros((self.n_walker, self.model.dim_f), dtype=float)
         for i, x0_i in enumerate(self.x0):
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
         sampler = self.__initiallize_mcmc__()
@@ -185,7 +196,7 @@ class LLHSolutionMCMC(Solution):
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walker,
-                                     dim=self.n_dims_f,
+                                     dim=self.model.dim_f,
                                      lnpostfn=self.llh.evaluate_llh,
                                      threads=self.n_threads)
 
@@ -194,10 +205,11 @@ class LLHSolutionMCMC(Solution):
                          N=n_steps,
                          rstate0=self.random_state)
         samples = sampler.chain[:, self.n_burn_steps:, :]
-        samples = samples.reshape((-1, self.n_dims_f))
+        samples = samples.reshape((-1, self.model.dim_f))
 
         probs = sampler.lnprobability[:, self.n_burn_steps:]
         probs = probs.reshape((-1))
         idx_max = np.argmax(probs)
-        samples = self.model.transform(samples)
+        if hasattr(self.model, 'transform_vec_fit'):
+            samples = self.model.transform_vec_fit(samples)
         return samples[idx_max, :], samples, probs

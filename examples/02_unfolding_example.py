@@ -32,7 +32,6 @@ def smear(unbinned_f, factor=10, exponent=2, scale=5):
     x_loc = unbinned_f + (unbinned_f / x_max * factor)**exponent
     return rnd.normal(loc=x_loc, scale=scale)
 
-
 if __name__ == '__main__':
 
     a = 0.2
@@ -64,9 +63,9 @@ if __name__ == '__main__':
     binned_g = np.digitize(unbinned_g, binning_g)
     binned_f = np.digitize(unbinned_f, binning_f)
 
-    model = ff.model.BasicLinearModel()
-    model.initialize(g=binned_g,
-                     f=binned_f)
+    model = ff.model.LinearModel()
+    model.initialize(digitized_obs=binned_g,
+                     digitized_truth=binned_f)
     plt.clf()
     plt.imshow(model.A)
     plt.savefig('02_matrix_A.png')
@@ -81,16 +80,15 @@ if __name__ == '__main__':
     binned_g = np.digitize(unbinned_g, binning_g)
     binned_f = np.digitize(unbinned_f, binning_f)
 
-    vec_g, vec_f = model.generate_vectors(binned_g, binned_f)
-    print(vec_f)
+    vec_g, vec_f = model.generate_vectors(digitized_obs=binned_g,
+                                          digitized_truth=binned_f)
     svd = ff.solution.SVDSolution()
     print('\n===========================\nResults for each Bin: Unfolded/True')
 
     print('\nSVD Solution for diffrent number of kept sigular values:')
     for i in range(1, 11):
-        vec_f_est, V_f_est = svd.run(vec_g=vec_g,
-                                     model=model,
-                                     keep_n_sig_values=i)
+        svd.initialize(model=model, vec_g=vec_g, tau=i)
+        vec_f_est, V_f_est = svd.fit()
         str_0 = '{} singular values:'.format(str(i).zfill(2))
         str_1 = ''
         for f_i_est, f_i in zip(vec_f_est, vec_f):
@@ -98,16 +96,25 @@ if __name__ == '__main__':
         print('{}\t{}'.format(str_0, str_1))
 
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) : (FRIST RUN)')
-    llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=2000,
+
+    llh = ff.solution.StandardLLH()
+    llh.initialize(vec_g=vec_g,
+                   model=model,
+                   tau=None,
+                   C='thikonov',
+                   neg_llh=False)
+
+    sol_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=2000,
                                            random_state=1337)
-    llh_mcmc.initialize(vec_g=vec_g, model=model)
-    vec_f_est_mcmc, sample, probs = llh_mcmc.run(tau=0)
+    sol_mcmc.initialize(llh=llh, model=model)
+    sol_mcmc.set_x0_and_bounds()
+    vec_f_est_mcmc, sample, probs = sol_mcmc.fit()
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
-
+    exit()
 
     print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     llh_sol = ff.solution.LLHSolutionMinimizer()
