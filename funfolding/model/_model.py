@@ -104,8 +104,8 @@ class Model:
         self.has_background = False
 
 
-class BasicLinearModel(Model):
-    name = 'BasicLinearModel'
+class LinearModel(Model):
+    name = 'LinearModel'
     status_need_for_eval = 0
     """ Basic Linear model:
     g = A * f
@@ -150,7 +150,7 @@ class BasicLinearModel(Model):
         Indicator if self.vec_b should be added to the model evaluationg
     """
     def __init__(self):
-        super(BasicLinearModel, self).__init__()
+        super(LinearModel, self).__init__()
         self.range_obs = None
         self.range_truth = None
         self.A = None
@@ -162,7 +162,7 @@ class BasicLinearModel(Model):
         """
 
         """
-        super(BasicLinearModel, self).initialize()
+        super(LinearModel, self).initialize()
         self.range_obs = (min(digitized_obs), max(digitized_obs))
         self.range_truth = (min(digitized_truth), max(digitized_truth))
         self.dim_f = self.range_obs[1] - self.range_obs[0] + 1
@@ -196,7 +196,7 @@ class BasicLinearModel(Model):
             Vector that should be passed to the regularization. For the
             BasisLinearModel it is identical to f.
         """
-        super(BasicLinearModel, self).evaluate()
+        super(LinearModel, self).evaluate()
         vec_g = np.dot(self.A, vec_fit)
         if self.has_background:
             vec_g += self.vec_b
@@ -219,7 +219,7 @@ class BasicLinearModel(Model):
         vec_f_0 : np.array, shape=(dim_f)
             Seed vector of a minimization.
         """
-        super(BasicLinearModel, self).generate_fit_x0()
+        super(LinearModel, self).generate_fit_x0()
         n = self.A.shape[1]
         if self.has_background:
             vec_f_0 = np.ones(n) * (np.sum(vec_g) - np.sum(self.vec_b)) / n
@@ -244,7 +244,7 @@ class BasicLinearModel(Model):
         bounds : list, shape=(dim_f)
             List of tuples with the bounds.
         """
-        super(BasicLinearModel, self).generate_fit_bounds()
+        super(LinearModel, self).generate_fit_bounds()
         n = self.A.shape[1]
         if self.has_background:
             n_events = np.sum(vec_g) - np.sum(self.vec_b)
@@ -254,9 +254,9 @@ class BasicLinearModel(Model):
         return bounds
 
     def set_model_x0(self):
-        """The BasicLinearModel has no referenz model_x0.
+        """The LinearModel has no referenz model_x0.
         """
-        super(BasicLinearModel, self).set_model_x0()
+        super(LinearModel, self).set_model_x0()
         self.logger.info('\tx0 has no effect for {}'.format(self.name))
 
     def evaluate_condition(self, normalize=True):
@@ -335,14 +335,14 @@ class BasicLinearModel(Model):
         vec_b : numpy.array, shape=(dim_g)
             Vector g which is added to the model evaluation.
         """
-        super(BasicLinearModel, self).add_background()
+        super(LinearModel, self).add_background()
         self.vec_b = vec_b
 
 
-class BiasedLinearModel(BasicLinearModel):
-    name = 'PriorLinearModel'
+class BiasedLinearModel(LinearModel):
+    name = 'BiasedLinearModel'
     status_need_for_eval = 1
-    """Extense the BasicLinearModel with an bias distribtuion model_x0.
+    """Extense the LinearModel with an bias distribtuion model_x0.
     the vec_f is interpreted as element-wise multiple of the model_x0.
 
     g = A * (model_x0 * vec_fit)
@@ -395,7 +395,7 @@ class BiasedLinearModel(BasicLinearModel):
         Indicator if self.vec_b should be added to the model evaluationg
     """
     def __init__(self):
-        super(BasicLinearModel, self).__init__()
+        super(LinearModel, self).__init__()
         self.range_obs = None
         self.range_truth = None
         self.A = None
@@ -468,7 +468,7 @@ class BiasedLinearModel(BasicLinearModel):
         vec_f_0 : np.array, shape=(dim_f)
             Seed vector of a minimization.
         """
-        super(BasicLinearModel, self).generate_fit_x0()
+        super(LinearModel, self).generate_fit_x0()
         return np.ones(self.dim_f)
 
     def generate_fit_bounds(self, vec_g):
@@ -488,7 +488,7 @@ class BiasedLinearModel(BasicLinearModel):
         bounds : list, shape=(dim_f)
             List of tuples with the bounds.
         """
-        super(BasicLinearModel, self).generate_fit_bounds()
+        super(LinearModel, self).generate_fit_bounds()
         n = self.A.shape[1]
         if self.has_background:
             n_events = np.sum(vec_g) - np.sum(self.vec_b)
@@ -511,7 +511,7 @@ class BiasedLinearModel(BasicLinearModel):
             Observable vector which is used to get the fit centered around
             1.
         """
-        super(BasicLinearModel, self).set_model_x0()
+        super(LinearModel, self).set_model_x0()
         if len(model_x0) != self.dim_f:
             raise ValueError("'model_x0' has to be of the length as "
                              "vec_f!")
@@ -526,6 +526,6 @@ class BiasedLinearModel(BasicLinearModel):
         vec_b : numpy.array, shape=(dim_g)
             Vector g which is added to the model evaluation.
         """
-        super(BasicLinearModel, self).add_background()
+        super(LinearModel, self).add_background()
         self.vec_b = vec_b
         self.background_factor = np.sum(vec_b)
