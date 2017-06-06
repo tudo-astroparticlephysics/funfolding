@@ -114,38 +114,40 @@ if __name__ == '__main__':
     for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
-    exit()
 
-    print('\nMinimize Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
-    llh_sol = ff.solution.LLHSolutionMinimizer()
-    llh_sol.initialize(vec_g=vec_g, model=model, bounds=True)
-    solution, V_f_est = llh_sol.run(tau=0)
+    print('\nMinimize Solution:')
+    llh = ff.solution.StandardLLH()
+    llh.initialize(vec_g=vec_g,
+                   model=model,
+                   tau=None,
+                   C='thikonov',
+                   neg_llh=True)
+
+    sol_mini = ff.solution.LLHSolutionMinimizer()
+    sol_mini.initialize(llh=llh, model=model)
+    sol_mini.set_x0_and_bounds()
+
+    solution, V_f_est = sol_mini.fit(constrain_N=False)
     vec_f_est_mini = solution.x
-    print(vec_f_est_mini)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mini, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
 
-    print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
-    llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=2000,
-                                           random_state=1337)
-    llh_mcmc.initialize(vec_g=vec_g, model=model)
-    vec_f_est_mcmc, sample, probs = llh_mcmc.run(tau=0)
+    print('\nMinimize Solution (constrained: sum(vec_f) == sum(vec_g)):')
+    solution, V_f_est = sol_mini.fit(constrain_N=True)
+    vec_f_est_mini = solution.x
     str_0 = 'unregularized:'
     str_1 = ''
-    for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
+    for f_i_est, f_i in zip(vec_f_est_mini, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
 
-
-    print('\nMinimize Solution (mcmc seed)')
-    llh_sol = ff.solution.LLHSolutionMinimizer()
-    llh_sol.initialize(vec_g=vec_g, model=model, bounds=True)
-    solution, V_f_est = llh_sol.run(tau=0, x0=vec_f_est_mcmc)
+    print('\nMinimize Solution (MCMC as seed):')
+    sol_mini.set_x0_and_bounds(x0=vec_f_est_mcmc)
+    solution, V_f_est = sol_mini.fit(constrain_N=False)
     vec_f_est_mini = solution.x
-    print(vec_f_est_mini)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mini, vec_f):

@@ -123,7 +123,7 @@ class LLHSolutionMinimizer(Solution):
             else:
                 bounds = None
         self.x0 = x0
-        self.bounds = x0
+        self.bounds = bounds
 
     def fit(self, constrain_N=True):
         super(LLHSolutionMinimizer, self).fit()
