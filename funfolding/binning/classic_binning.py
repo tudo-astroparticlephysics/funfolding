@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from .discretization import Discretization
+from ._binning import Binning
 
 import itertools
 import numpy as np
@@ -9,8 +9,10 @@ import copy
 
 from astroML.density_estimation.bayesian_blocks import bayesian_blocks
 
-class ClassicBinning(Discretization):
+class ClassicBinning(Binning):
     name = 'ClassicalBinning'
+    status_need_for_digitize = 0
+
     def __init__(self,
                  bins,
                  range=None,
@@ -36,11 +38,11 @@ class ClassicBinning(Discretization):
         else:
             self.random_state = random_state
 
-    def fit(self,
+    def initialize(self,
             X,
             y=None,
             sample_weight=None):
-        super(ClassicBinning, self).fit()
+        super(ClassicBinning, self).initialize()
         for dim_i in range(self.n_dims):
             if sample_weight is None:
                 w_i = None
@@ -91,6 +93,7 @@ class ClassicBinning(Discretization):
         clone.oor_tuples = copy.deepcopy(self.oor_tuples)
         clone.oor_handle = copy.deepcopy(self.oor_handle)
         clone.random_state = copy.deepcopy(self.random_state)
+        clone.status = int(self.status)
         return clone
 
     def __merge__(self,
@@ -102,13 +105,12 @@ class ClassicBinning(Discretization):
                    right=False,
                    mode='closest',
                    **kwargs):
+        super(ClassicBinning, self).merge()
         n_merg_iterations = 0
         binned = self.digitize(X, right=right)
         counted = np.bincount(binned,
                               weights=sample_weight,
                               minlength=self.n_bins)
-        original_counted = counted.copy()
-        orignal_mean_label = counted.copy()
         original_sum = np.sum(counted)
 
         if min_samples is None and max_bins is None:
@@ -177,6 +179,7 @@ class ClassicBinning(Discretization):
                right=False,
                mode='closest',
                inplace=False):
+
         if inplace:
             return self.__merge__(X=X,
                                   min_samples=min_samples,

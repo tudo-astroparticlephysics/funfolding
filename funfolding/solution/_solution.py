@@ -2,11 +2,11 @@ import logging
 
 import numpy as np
 from scipy import linalg
-from scipy.optimize import minimize, differential_evolution
+from scipy.optimize import minimize
 
 import emcee
 
-from ..model import Model, LinearModel
+from ..model import LinearModel
 
 
 class Solution(object):
