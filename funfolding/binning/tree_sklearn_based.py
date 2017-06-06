@@ -263,8 +263,7 @@ class TreeBinningSklearn(Binning):
         self.random_state = random_state
         self.regression = regression
         if regression:
-            self.logger.info('Initialized TreeBiningSklearn with a '
-                        'regression tree.')
+            self.logger.debug('\tUsing RegressionTree')
             self.tree = DecisionTreeRegressor(
                 max_depth=max_depth,
                 min_samples_split=min_samples_split,
@@ -275,7 +274,7 @@ class TreeBinningSklearn(Binning):
                 min_weight_fraction_leaf=min_weight_fraction_leaf,
                 random_state=random_state)
             if boosted in ['linear', 'square', 'exponential']:
-                self.logger.info('Activated AdaBoost!')
+                self.logger.debug('\t Using Adaboost')
                 self.boosted = AdaBoostRegressor(
                     base_estimator=self.tree,
                     n_estimators=n_estimators,
@@ -291,8 +290,7 @@ class TreeBinningSklearn(Binning):
             else:
                 self.boosted = None
         else:
-            self.logger.info('Initialized TreeBiningSklearn with a '
-                        'classification tree.')
+            self.logger.debug('\tUsing ClassificationTree')
             self.tree = DecisionTreeClassifier(
                 max_depth=max_depth,
                 min_samples_split=min_samples_split,
@@ -303,7 +301,7 @@ class TreeBinningSklearn(Binning):
                 min_impurity_split=min_impurity_split,
                 random_state=random_state)
             if boosted in ['SAMME', 'SAMME.R']:
-                self.logger.info('Activated AdaBoost!')
+                self.logger.debug('\t Using Adaboost')
                 self.boosted = AdaBoostClassifier(
                     base_estimator=self.tree,
                     n_estimators=n_estimators,
@@ -354,11 +352,10 @@ class TreeBinningSklearn(Binning):
             Returns self.
         """
         super(TreeBinningSklearn, self).initialize()
-        self.logger.info('Start to fit the model!')
         if self.regression and uniform:
             self.logger.warn('Uniform smapling is only supported for classifcation')
         elif uniform:
-            self.logger.info('Sampling uniform distributed class label!')
+            self.logger.info('\tSampling uniform distributed class label!')
             mask = __sample_uniform__(y, sample_weight=sample_weight)
             y = y[mask]
             X = X[mask]
@@ -371,11 +368,11 @@ class TreeBinningSklearn(Binning):
                              sample_weight=sample_weight)
             if self.ensemble_select_ == 'best':
                 tree_idx = np.argmax(self.boosted.estimator_weights_)
-                self.logger.info('{} has the highest estimator weight.'.format(
+                self.logger.debug('\tTree {} highest estimator weight.'.format(
                     tree_idx))
             elif self.ensemble_select_ == 'last':
                 tree_idx = -1
-                self.logger.info('Last tree selected!')
+                self.logger.debug('\tTLast tree selected!')
             self.tree = self.boosted.estimators_[tree_idx]
         else:
             self.tree.fit(X=X,
@@ -414,6 +411,7 @@ class TreeBinningSklearn(Binning):
         y : array of shape = [n_samples] or [n_samples, n_outputs]
             The predicted classes, or the predict values.
         """
+        self.logger.info('Using tree to predict label!')
         if self.merged:
             self.logger.warn('The model was merged after the trainng and '
                         'might give unreasonable predictions.')
@@ -444,6 +442,7 @@ class TreeBinningSklearn(Binning):
             The class probabilities of the input samples. The order of the
             classes corresponds to that in the attribute `classes_`.
         """
+        self.logger.info('Using tree to predict probability!')
         if self.merged:
             self.logger.warn('The model was merged after the trainng and '
                         'might give unreasonable predictions.')
@@ -504,7 +503,7 @@ class TreeBinningSklearn(Binning):
         clone.tree = copy.deepcopy(self.tree)
         return clone
 
-    def merge(self, X, threshold):
+    def merge(self, X, threshold, inplace=True):
         """Modifies the tree to ensure that in each leaf/bin are at least
         ``threshold`` samples.
 
@@ -517,14 +516,31 @@ class TreeBinningSklearn(Binning):
 
         threshold : int
             Minimal number of samples in each leaf.
+
+        inplace : bool, optinal
+            If 'True' the instance is merged and with inplace=True a
+            copy of the instance is merged and returned
+
+        Returns
+        -------
+        merged_binning : TreeBinningSklearn
+            Instance with merged bins.
         """
+        if inplace:
+            return self.__merge__(X=X, threshold=threshold)
+        else:
+            clone = self.copy()
+            return clone.__merge__(X=X, threshold=threshold)
+
+
+    def __merge__(self, X, threshold):
         super(TreeBinningSklearn, self).merge()
-        self.logger.debug('Started to merge with less than {} samples.'.format(
+        self.logger.info('\tMerging leafs with less than {} samples.'.format(
             threshold))
         tree = self.tree.tree_
 
         def find_withered_leaf():
-            self.logger.debug('Looking for leafs below the Threshold!')
+            self.logger.debug('\tLooking for leafs below the Threshold!')
             leafyfied = self.tree.apply(X)
             occureance = np.bincount(leafyfied, minlength=tree.node_count)
             is_leaf = tree.children_right == -1
@@ -546,5 +562,6 @@ class TreeBinningSklearn(Binning):
                 remove_node(tree, idx)
                 self.__generate_leaf_mapping__()
         n_bins_after_pruning = self.n_bins
-        self.logger.debug('Number of leafs reduced from {} to {}.'.format(
+        self.logger.info('\tNumber of leafs reduced from {} to {}.'.format(
             n_bins_before_pruning, n_bins_after_pruning))
+        return self

@@ -88,9 +88,6 @@ if __name__ == '__main__':
     ax[1].set_ylim([-5, 5])
     fig.savefig('00_example_gaussian_similar_clf.png')
 
-
-
-
     fig, ax = plt.subplots(1, 2, figsize=(24, 9))
     similar_reg = classic_binning.merge(X,
                                     min_samples=threshold,

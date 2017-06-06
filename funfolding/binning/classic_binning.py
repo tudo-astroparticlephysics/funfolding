@@ -7,7 +7,12 @@ import numpy as np
 
 import copy
 
-from astroML.density_estimation.bayesian_blocks import bayesian_blocks
+try:
+    from astroML.density_estimation.bayesian_blocks import bayesian_blocks
+    got_astroML = True
+except ImportError:
+    got_astroML = False
+
 
 class ClassicBinning(Binning):
     name = 'ClassicalBinning'
@@ -49,7 +54,10 @@ class ClassicBinning(Binning):
             else:
                 w_i = sample_weight[:, dim_i]
             if self.bins[dim_i] == 'blocks':
-                self.edges.append(bayesian_blocks(X[:, dim_i]))
+                if got_astroML:
+                    self.edges.append(bayesian_blocks(X[:, dim_i]))
+                else:
+                    raise RuntimeError("Install astroML to use 'blocks'")
             else:
                 self.edges.append(self.hist_func(a=X[:, dim_i],
                                                  bins=self.bins[dim_i],
