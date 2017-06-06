@@ -28,6 +28,10 @@ class LLH(object):
         self.logger = logging.getLogger(self.name)
         self.logger.debug('Initilized {}'.format(self.name))
         self.status = -1
+
+        self.vec_g = None
+        self.model = None
+
         self.gradient_defined = False
         self.hesse_matrix_defined = False
 
@@ -67,22 +71,34 @@ class StandardLLH(LLH):
     name = 'StandardLLH'
     status_need_for_eval = 0
 
-    def initialize(self, vec_g, model, tau, C, N_prior=False, neg_llh=True):
+    def initialize(self, vec_g, model, tau=None, C='thikonov', neg_llh=True):
         super(StandardLLH, self).initialize()
         if not isinstance(model, Model):
             raise ValueError("'model' has to be of type Model!")
         self.model = model
-        self.n_dims_f = model.dim_f
         self.vec_g = vec_g
         self.N = np.sum(vec_g)
-        self.C = C
-        self.tau = tau
+        self.C = None
+        if isinstance(str, C):
+            if C.lower() == 'thikonov':
+                self.C = create_C_thikonov(model.dim_f)
+        elif isinstance(int, C):
+            if C == 2:
+                self.C = create_C_thikonov(model.dim_f)
+        if self.C is None:
+            raise ValueError("{} invalid option for 'C'".format(C))
+        if tau is None:
+            self.tau = 0.
+        elif isinstance(tau, float):
+            self.tau = np.ones(model.dim_f) * tau
+        elif callable(tau):
+            self.tau = tau(np.arange(model.dim_f))
+        else:
+            raise ValueError("'tau' as to be either None, float or callable!")
         if neg_llh:
              self.factor = 1.
         else:
             self.factor = -1.
-        self.neg_llh = neg_llh
-        self.N_prior = N_prior
         if isinstance(model, LinearModel):
             self.gradient_defined = True
             self.hesse_matrix_defined = True
@@ -98,9 +114,6 @@ class StandardLLH(LLH):
         poisson_part = np.sum(g_est - self.g * np.log(g_est))
         regularization_part = 0.5 * self.tau * np.dot(
             np.dot(f_reg.T, self.C), f_reg)
-        if self.N_prior:
-            sum_f = np.sum(f)
-            regularization_part += sum_f - self.N * np.log(sum_f)
         return (poisson_part + regularization_part) * self.factor
 
     def evaluate_gradient(self, f):
