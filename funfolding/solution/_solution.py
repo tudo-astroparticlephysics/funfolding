@@ -15,22 +15,22 @@ class Solution(object):
 
     def __init__(self, random_state=None):
         self.logger = logging.getLogger(self.name)
-        self.logger.info('Initilized {}'.format(self.name))
+        self.logger.debug('Initilized {}'.format(self.name))
         self.status = -1
 
     def initialize(self):
-        self.logger.info('Initilizing the Solution!')
+        self.logger.debug('Initilizing the Solution!')
         self.status = 0
 
     def set_x0_and_bounds(self):
-        self.logger.info('Initilizing x0 and bounds!')
+        self.logger.debug('Initilizing x0 and bounds!')
         if self.status_need_for_fit == 0:
             self.logger.warn("{} doesn't use x0 and bounds!")
         else:
             self.status = 1
 
     def fit(self):
-        self.logger.info('Running Solution!')
+        self.logger.debug('Running Solution!')
         if self.status < 0 and self.status_need_for_fit == 0:
             raise RuntimeError("Solution has to be intilized. "
                                "Run 'Solution.initialize' first!")

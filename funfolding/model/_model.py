@@ -28,7 +28,7 @@ class Model:
     """
     def __init__(self):
         self.logger = logging.getLogger(self.name)
-        self.logger.info('Created {}'.format(self.name))
+        self.logger.debug('Created {}'.format(self.name))
         self.status = -1
         self.has_background = False
 
@@ -36,7 +36,7 @@ class Model:
         """This function should be called with all needed values. To actually
         fill all the models with values.
         """
-        self.logger.info('Model initialized!')
+        self.logger.debug('Model initialized!')
         self.status = 0
 
     def evaluate(self):
@@ -48,7 +48,7 @@ class Model:
             vec_f_reg : Vector used in the regularization
 
         """
-        self.logger.info('Evaluation!')
+        self.logger.debug('Evaluation!')
         if self.status < 0 and self.status_need_for_eval == 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
@@ -61,7 +61,7 @@ class Model:
         """Some models need to be set up with a x0 for the model. For those .
         models the class parameter 'status_need_for_eval' should be set to 1.
         """
-        self.logger.info('Setting up model x0!')
+        self.logger.debug('Setting up model x0!')
         if self.status < 0:
             raise RuntimeError("Model has to be intilized, before setting x0. "
                                "Run 'model.initialize' first!")
@@ -71,7 +71,7 @@ class Model:
         """The model should be able to return resonable starting values
         for the fitter.
         """
-        self.logger.info('Generating x0 for the fitter!')
+        self.logger.debug('Generating x0 for the fitter!')
         if self.status < 0 and self.status_need_for_eval == 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
@@ -83,7 +83,7 @@ class Model:
     def generate_fit_bounds(self):
         """The model should be able to return resonable bounds for the fitter.
         """
-        self.logger.info('Generating bounds for the fitter!')
+        self.logger.debug('Generating bounds for the fitter!')
         if self.status < 0 and self.status_need_for_eval == 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
@@ -93,14 +93,14 @@ class Model:
                                "'model.set_x0' first!")
 
     def add_background(self):
-        self.logger.info('Added background vector!')
+        self.logger.debug('Added background vector!')
         self.has_background = True
 
     def remove_background(self):
         """Disables the background vector. A stored background vector is
         not deleted.
         """
-        self.logger.info('Removed background vector!')
+        self.logger.debug('Removed background vector!')
         self.has_background = False
 
 
@@ -273,7 +273,7 @@ class LinearModel(Model):
         S_values : np.array, shape=(dim_f)
             Ordered array of the singular values.
         """
-        self.logger.info('Evaluation of Singular Values!')
+        self.logger.debug('Evaluation of Singular Values!')
         if self.status < 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")

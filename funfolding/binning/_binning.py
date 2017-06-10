@@ -9,12 +9,12 @@ class Binning:
 
     def __init__(self):
         self.logger = logging.getLogger(self.name)
-        self.logger.info('Created {}'.format(self.name))
+        self.logger.debug('Created {}'.format(self.name))
         self.n_bins = None
         self.status = -1
 
     def initialize(self):
-        self.logger.info("Building initial Binning!")
+        self.logger.debug("Building initial Binning!")
         self.status = 0
 
     def fit(self, *args, **kwargs):
@@ -24,10 +24,10 @@ class Binning:
         if self.status < self.status_need_for_digitize:
             raise RuntimeError("Binning needs to be fitted! "
                                "Run 'Binning.initialize' first!")
-        self.logger.info('Digitizing values!')
+        self.logger.debug('Digitizing values!')
 
     def merge(self):
-        self.logger.info('Merging bins of the model')
+        self.logger.debug('Merging bins of the model')
         if self.status == -1:
             raise RuntimeError("Run 'initialize' before 'reduce'!")
         elif self.status > 0:
@@ -39,7 +39,7 @@ class Binning:
         return self.merge(*args, **kwargs)
 
     def histogram(self, X=None, sample_weight=None):
-        self.logger.info('Building a histogram!')
+        self.logger.debug('Building a histogram!')
         if sample_weight is not None:
             original_sum = np.sum(sample_weight)
         else:

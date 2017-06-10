@@ -411,7 +411,7 @@ class TreeBinningSklearn(Binning):
         y : array of shape = [n_samples] or [n_samples, n_outputs]
             The predicted classes, or the predict values.
         """
-        self.logger.info('Using tree to predict label!')
+        self.logger.debug('Using tree to predict label!')
         if self.merged:
             self.logger.warn('The model was merged after the trainng and '
                         'might give unreasonable predictions.')
@@ -442,7 +442,7 @@ class TreeBinningSklearn(Binning):
             The class probabilities of the input samples. The order of the
             classes corresponds to that in the attribute `classes_`.
         """
-        self.logger.info('Using tree to predict probability!')
+        self.logger.debug('Using tree to predict probability!')
         if self.merged:
             self.logger.warn('The model was merged after the trainng and '
                         'might give unreasonable predictions.')
@@ -535,7 +535,7 @@ class TreeBinningSklearn(Binning):
 
     def __merge__(self, X, threshold):
         super(TreeBinningSklearn, self).merge()
-        self.logger.info('\tMerging leafs with less than {} samples.'.format(
+        self.logger.debug('\tMerging leafs with less than {} samples.'.format(
             threshold))
         tree = self.tree.tree_
 
@@ -562,6 +562,6 @@ class TreeBinningSklearn(Binning):
                 remove_node(tree, idx)
                 self.__generate_leaf_mapping__()
         n_bins_after_pruning = self.n_bins
-        self.logger.info('\tNumber of leafs reduced from {} to {}.'.format(
+        self.logger.debug('\tNumber of leafs reduced from {} to {}.'.format(
             n_bins_before_pruning, n_bins_after_pruning))
         return self
