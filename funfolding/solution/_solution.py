@@ -1,4 +1,4 @@
-import logging
+import warnings
 
 import numpy as np
 from scipy import linalg
@@ -14,23 +14,18 @@ class Solution(object):
     status_need_for_fit = 0
 
     def __init__(self, random_state=None):
-        self.logger = logging.getLogger(self.name)
-        self.logger.debug('Initilized {}'.format(self.name))
         self.status = -1
 
     def initialize(self):
-        self.logger.debug('Initilizing the Solution!')
         self.status = 0
 
     def set_x0_and_bounds(self):
-        self.logger.debug('Initilizing x0 and bounds!')
         if self.status_need_for_fit == 0:
-            self.logger.warn("{} doesn't use x0 and bounds!")
+            warnings.warn("{} doesn't use x0 and bounds!")
         else:
             self.status = 1
 
     def fit(self):
-        self.logger.debug('Running Solution!')
         if self.status < 0 and self.status_need_for_fit == 0:
             raise RuntimeError("Solution has to be intilized. "
                                "Run 'Solution.initialize' first!")
@@ -62,7 +57,7 @@ class SVDSolution(Solution):
             self.tau = np.ones(model.dim_f)
         elif isinstance(tau, int):
             if tau > model.dim_f:
-                self.logger.warn('Number of used singular values is '
+                warnings.warn('Number of used singular values is '
                                  'greater than the total number of '
                                  'singular values. The solution will be '
                                  'unregularized!')
@@ -175,14 +170,13 @@ class LLHSolutionMCMC(Solution):
         self.model = model
 
 
-
     def set_x0_and_bounds(self, x0=None, bounds=False):
         super(LLHSolutionMCMC, self).set_x0_and_bounds()
         if x0 is None:
             x0 = self.model.generate_fit_x0(self.vec_g)
         self.x0 = x0
         if bounds is not None and bounds:
-            self.logger.warn("'bounds' have no effect or MCMC!")
+            warnings.warn("'bounds' have no effect or MCMC!")
 
     def fit(self):
         super(LLHSolutionMCMC, self).fit()

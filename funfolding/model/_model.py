@@ -1,4 +1,4 @@
-import logging
+import warnings
 import numpy as np
 from scipy import linalg
 
@@ -9,16 +9,12 @@ class Model:
     """ Base class for a model. Actual models should inherit from this class.
 
     In this class the functions that should be implemented by each model are
-    defined and some logging is implemented.
+    defined.
 
     Attributes
     ----------
     name : str
         Name of the model.
-
-    logger : logging.Logger
-        Instance of a Logger. The name of the logger is the name of the
-        model.
 
     status : int
         Indicates the status of the model:
@@ -27,8 +23,6 @@ class Model:
              1 : Filled with values and x0 set (optional level).
     """
     def __init__(self):
-        self.logger = logging.getLogger(self.name)
-        self.logger.debug('Created {}'.format(self.name))
         self.status = -1
         self.has_background = False
 
@@ -36,7 +30,6 @@ class Model:
         """This function should be called with all needed values. To actually
         fill all the models with values.
         """
-        self.logger.debug('Model initialized!')
         self.status = 0
 
     def evaluate(self):
@@ -48,7 +41,6 @@ class Model:
             vec_f_reg : Vector used in the regularization
 
         """
-        self.logger.debug('Evaluation!')
         if self.status < 0 and self.status_need_for_eval == 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
@@ -61,7 +53,6 @@ class Model:
         """Some models need to be set up with a x0 for the model. For those .
         models the class parameter 'status_need_for_eval' should be set to 1.
         """
-        self.logger.debug('Setting up model x0!')
         if self.status < 0:
             raise RuntimeError("Model has to be intilized, before setting x0. "
                                "Run 'model.initialize' first!")
@@ -71,7 +62,6 @@ class Model:
         """The model should be able to return resonable starting values
         for the fitter.
         """
-        self.logger.debug('Generating x0 for the fitter!')
         if self.status < 0 and self.status_need_for_eval == 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
@@ -83,7 +73,6 @@ class Model:
     def generate_fit_bounds(self):
         """The model should be able to return resonable bounds for the fitter.
         """
-        self.logger.debug('Generating bounds for the fitter!')
         if self.status < 0 and self.status_need_for_eval == 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
@@ -93,14 +82,12 @@ class Model:
                                "'model.set_x0' first!")
 
     def add_background(self):
-        self.logger.debug('Added background vector!')
         self.has_background = True
 
     def remove_background(self):
         """Disables the background vector. A stored background vector is
         not deleted.
         """
-        self.logger.debug('Removed background vector!')
         self.has_background = False
 
 
@@ -114,10 +101,6 @@ class LinearModel(Model):
     ----------
     name : str
         Name of the model.
-
-    logger : logging.Logger
-        Instance of a Logger. The name of the logger is the name of the
-        model.
 
     status : int
         Indicates the status of the model:
@@ -257,7 +240,7 @@ class LinearModel(Model):
         """The LinearModel has no referenz model_x0.
         """
         super(LinearModel, self).set_model_x0()
-        self.logger.warn('\tx0 has no effect for {}'.format(self.name))
+        warnings.warn('\tx0 has no effect for {}'.format(self.name))
 
     def evaluate_condition(self, normalize=True):
         """Returns an ordered array of the singular values of matrix A.
@@ -273,7 +256,6 @@ class LinearModel(Model):
         S_values : np.array, shape=(dim_f)
             Ordered array of the singular values.
         """
-        self.logger.debug('Evaluation of Singular Values!')
         if self.status < 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
@@ -282,7 +264,6 @@ class LinearModel(Model):
         return S_values
 
     def __generate_binning__(self):
-        self.logger.debug('\t\tGenerating binning vectors!')
         if self.status < 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
@@ -356,10 +337,6 @@ class BiasedLinearModel(LinearModel):
     ----------
     name : str
         Name of the model.
-
-    logger : logging.Logger
-        Instance of a Logger. The name of the logger is the name of the
-        model.
 
     model_x0 : np.array, shape=(vec_f)
         Distribtuion which is element-wise multiplied with the vec_fit.

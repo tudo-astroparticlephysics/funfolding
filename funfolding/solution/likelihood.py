@@ -1,5 +1,3 @@
-import logging
-
 import numpy as np
 
 
@@ -25,8 +23,6 @@ class LLH(object):
     status_need_for_eval = 0
 
     def __init__(self):
-        self.logger = logging.getLogger(self.name)
-        self.logger.debug('Initilized {}'.format(self.name))
         self.status = -1
 
         self.vec_g = None
@@ -36,18 +32,15 @@ class LLH(object):
         self.hesse_matrix_defined = False
 
     def initialize(self):
-        self.logger.debug('Initilizing the LLh!')
         self.status = 0
 
     def evaluate_llh(self):
-        self.logger.debug('Evaluating LLH!')
         if self.status < 0:
             raise RuntimeError("LLH has to be intilized. "
                                "Run 'LLH.initialize' first!")
 
     def evaluate_gradient(self):
         if self.gradient_defined:
-            self.logger.debug('Evaluating Hesse Matrix!')
             if self.status < 0:
                 raise RuntimeError("LLH has to be intilized. "
                                    "Run 'LLH.initialize' first!")
@@ -56,7 +49,6 @@ class LLH(object):
 
     def evaluate_hesse_matrix(self):
         if self.hesse_matrix_defined:
-            self.logger.debug('Evaluating Hesse Matrix!')
             if self.status < 0:
                 raise RuntimeError("LLH has to be intilized. "
                                    "Run 'LLH.initialize' first!")
@@ -96,7 +88,7 @@ class StandardLLH(LLH):
         else:
             raise ValueError("'tau' as to be either None, float or callable!")
         if neg_llh:
-             self.factor = 1.
+            self.factor = 1.
         else:
             self.factor = -1.
         if isinstance(model, LinearModel):
