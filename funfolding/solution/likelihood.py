@@ -1,5 +1,6 @@
-import numpy as np
+import warnings
 
+import numpy as np
 
 from ..model import LinearModel, Model
 
@@ -63,34 +64,65 @@ class StandardLLH(LLH):
     name = 'StandardLLH'
     status_need_for_eval = 0
 
-    def initialize(self, vec_g, model, tau=None, C='thikonov', neg_llh=True):
+    def __init__(self,
+                 tau=None,
+                 C='thikonov',
+                 vec_acceptance=None,
+                 log_f=False,
+                 neg_llh=True):
+        super(StandardLLH, self).__init__()
+        self.C = C
+        self.tau = tau
+        if neg_llh:
+            self.factor = 1.
+        else:
+            self.factor = -1.
+        self.log_f_reg = log_f
+        self.vec_acceptance = vec_acceptance
+
+    def initialize(self,
+                   vec_g,
+                   model):
         super(StandardLLH, self).initialize()
         if not isinstance(model, Model):
             raise ValueError("'model' has to be of type Model!")
         self.model = model
         self.vec_g = vec_g
         self.N = np.sum(vec_g)
-        self.C = None
-        if isinstance(C, str):
-            if C.lower() == 'thikonov' or C.lower() == '2':
-                self.C = create_C_thikonov(model.dim_f)
-        elif isinstance(C, int):
-            if C == 2:
-                self.C = create_C_thikonov(model.dim_f)
-        if self.C is None:
-            raise ValueError("{} invalid option for 'C'".format(C))
-        if tau is None:
-            self.tau = 0.
-        elif isinstance(tau, float):
-            self.tau = np.ones(model.dim_f) * tau
-        elif callable(tau):
-            self.tau = tau(np.arange(model.dim_f))
+
+        if self.tau is None:
+            self._tau = None
         else:
-            raise ValueError("'tau' as to be either None, float or callable!")
-        if neg_llh:
-            self.factor = 1.
+            if isinstance(self.tau, float):
+                if self.tau <= 0.:
+                    self._tau = None
+                else:
+                    self._tau = np.ones(model.dim_f) * self.tau
+            elif callable(self.tau):
+                self._tau = self.tau(np.arange(model.dim_f))
+            else:
+                raise ValueError("'tau' as to be either None, float or "
+                                 "callable!")
+            if self._tau is not None:
+                if isinstance(self.C, str):
+                    if self.C.lower() == 'thikonov' or self.C.lower() == '2':
+                        m_C = create_C_thikonov(model.dim_f)
+                elif isinstance(self.C, int):
+                    if self.C == 2:
+                        m_C = create_C_thikonov(model.dim_f)
+                if m_C is None:
+                    raise ValueError("{} invalid option for 'C'".format(
+                        self.C))
+                self._C = np.dot(np.dot(m_C, np.diag(self._tau)), m_C)
+
+        if self.vec_acceptance is not None:
+            if len(self.vec_acceptance) != model.dim_f:
+                raise ValueError("'vec_acceptance' has to be of the same "
+                                 "length as vec_f!")
+            self.vec_acceptance = self.vec_acceptance
         else:
-            self.factor = -1.
+            self.vec_acceptance = 1.
+
         if isinstance(model, LinearModel):
             self.gradient_defined = True
             self.hesse_matrix_defined = True
@@ -101,12 +133,19 @@ class StandardLLH(LLH):
         if any(g_est < 0) or any(f < 0):
             return np.inf * self.factor
         poisson_part = np.sum(g_est - self.vec_g * np.log(g_est))
-        regularization_part = 0.5 * self.tau * np.dot(
-            np.dot(f_reg.T, self.C), f_reg)
+        if self._tau is not None:
+            f_reg_used = f_reg * self.vec_acceptance
+            if self.log_f_reg:
+                f_reg_used = np.log10(f_reg_used + 1)
+            regularization_part = 0.5 * np.dot(
+                np.dot(f_reg_used.T, self._C), f_reg_used)
+        else:
+            regularization_part = 0
         return (poisson_part + regularization_part) * self.factor
 
     def evaluate_gradient(self, f):
         super(StandardLLH, self).evaluate_gradient()
+        warnings.warn('Gradient is not tested!')
         g_est, f, f_reg = self.model.evaluate(f)
         h_unreg = np.sum(self.model.A, axis=0)
         part_b = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
@@ -117,6 +156,7 @@ class StandardLLH(LLH):
 
     def evaluate_hesse_matrix(self, f):
         super(StandardLLH, self).evaluate_hesse_matrix()
+        warnings.warn('Gradient is not tested!')
         g_est, f, f_reg = self.model.evaluate(f)
         H_unreg = np.dot(np.dot(self.model.A.T,
                                 np.diag(self.vec_g / g_est**2)),
