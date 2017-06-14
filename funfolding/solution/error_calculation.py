@@ -22,7 +22,6 @@ def calc_feldman_cousins_errors_binned(best_fit,
                                        eps=1e-2):
     sigma_vec_best = np.zeros((2, len(best_fit)))
     for i, best_fit_i in enumerate(best_fit):
-        print('========')
         eps_i = best_fit_i * eps
         sample_i = sample[:, i]
         min_s = np.min(sample_i)
@@ -35,7 +34,6 @@ def calc_feldman_cousins_errors_binned(best_fit,
                             bins=binning)[0]
         hist = hist / float(sample.shape[0])
         bin_centers = (binning[1:] + binning[:-1]) / 2.
-        print(binning[0], binning[-1])
         diff = np.absolute(bin_centers - best_fit[i])
         order = np.argsort(diff)
         sum_ = 0.
@@ -53,7 +51,4 @@ def calc_feldman_cousins_errors_binned(best_fit,
         if sigma_vec_best[0, i] < 0.:
             sigma_vec_best[0, i] = 0.
         sigma_vec_best[1, i] = np.max(added_bins)
-        print(best_fit_i)
-        print(sigma_vec_best[:, i])
-        print('========')
     return sigma_vec_best
