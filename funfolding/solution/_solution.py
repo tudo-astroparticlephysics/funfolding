@@ -186,7 +186,8 @@ class LLHSolutionMCMC(Solution):
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
         sampler = self.__initiallize_mcmc__()
         vec_f, samples, probs = self.__run_mcmc__(sampler, pos_x0, n_steps)
-        return vec_f, samples, probs
+        sigma_vec_f = calc_feldman_cousins_errors(vec_f, sigma_vec_f)
+        return vec_f, sigma_vec_f, samples, probs
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walker,
