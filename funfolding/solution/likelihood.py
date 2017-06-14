@@ -141,7 +141,7 @@ class StandardLLH(LLH):
                 np.dot(f_reg_used.T, self._C), f_reg_used)
         else:
             regularization_part = 0
-        return (poisson_part + regularization_part) * self.factor
+        return (poisson_part - regularization_part) * self.factor
 
     def evaluate_gradient(self, f):
         super(StandardLLH, self).evaluate_gradient()
