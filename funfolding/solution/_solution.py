@@ -7,7 +7,7 @@ from scipy.optimize import minimize
 import emcee
 
 from ..model import LinearModel
-from .error_calculation import calc_feldman_cousins_errors
+from .error_calculation import calc_feldman_cousins_errors_binned
 
 
 class Solution(object):
@@ -187,7 +187,7 @@ class LLHSolutionMCMC(Solution):
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
         sampler = self.__initiallize_mcmc__()
         vec_f, samples, probs = self.__run_mcmc__(sampler, pos_x0, n_steps)
-        sigma_vec_f = calc_feldman_cousins_errors(vec_f, samples)
+        sigma_vec_f = calc_feldman_cousins_errors_binned(vec_f, samples)
         return vec_f, sigma_vec_f, samples, probs
 
     def __initiallize_mcmc__(self):
