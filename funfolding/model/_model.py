@@ -3,7 +3,7 @@ import numpy as np
 from scipy import linalg
 
 
-class Model:
+class Model(object):
     name = 'Model'
     status_need_for_eval = 0
     """ Base class for a model. Actual models should inherit from this class.

@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 
 
-class Binning:
+class Binning(object):
     name = 'Binning'
     status_need_for_digitize = 0
 
