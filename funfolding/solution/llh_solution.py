@@ -206,6 +206,8 @@ class LLHSolutionMCMC(Solution):
         self.model = None
         self.n_dims_f = None
         self.n_threads = 1
+        # This has to be set this way for emcee to have a seed, otherwise setting the RandomState fails
+        self.random_state = np.random.mtrand.RandomState(random_state)
 
     def initialize(self, vec_g, model, bounds=True):
         super(LLHSolutionMCMC, self).initialize()
@@ -246,7 +248,7 @@ class LLHSolutionMCMC(Solution):
     def __run_mcmc__(self, sampler, x0, n_steps):
         sampler.run_mcmc(pos0=x0,
                          N=n_steps,
-                         rstate0=self.random_state)
+                         rstate0=self.random_state.get_state())
         print(sampler.chain.shape)
         samples = sampler.chain[:, self.n_burn_steps:, :]
         samples = samples.reshape((-1, self.n_dims_f))
