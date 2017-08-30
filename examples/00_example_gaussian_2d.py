@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from funfolding import binning
+from funfolding.visualization.visualize_classic_binning import plot_binning
 
 if __name__ == '__main__':
     logging.captureWarnings(True)
@@ -30,11 +31,12 @@ if __name__ == '__main__':
     classic_binning.initialize(X)
 
     fig, ax = plt.subplots()
-    binning.visualize_classic_binning(ax,
-                                      classic_binning,
-                                      X,
-                                      log_c=False,
-                                      cmap='viridis')
+    plot_binning(
+        ax,
+        classic_binning,
+        X,
+        log_c=False,
+        cmap='viridis')
     fig.savefig('00_example_gaussian_unmerged.png')
 
     threshold = 50
@@ -45,11 +47,12 @@ if __name__ == '__main__':
                                     mode='closest')
     binned = closest.histogram(X)
     fig, ax = plt.subplots()
-    binning.visualize_classic_binning(ax,
-                                             closest,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(
+        ax,
+        closest,
+        X,
+        log_c=False,
+        cmap='viridis')
     fig.savefig('00_example_gaussian_closest.png')
 
     lowest = classic_binning.merge(X,
@@ -58,11 +61,11 @@ if __name__ == '__main__':
                                    mode='lowest')
     binned = lowest.histogram(X)
     fig, ax = plt.subplots()
-    binning.visualize_classic_binning(ax,
-                                             lowest,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax,
+                 lowest,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     fig.savefig('00_example_gaussian_lowest.png')
 
 
@@ -74,11 +77,11 @@ if __name__ == '__main__':
                                         mode='similar',
                                         y=y_clf)
     binned = similar_clf.histogram(X)
-    binning.visualize_classic_binning(ax[0],
-                                             similar_clf,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax[0],
+                 similar_clf,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     ax[1].hexbin(X[:, 0],
                  X[:, 1],
                  C=y_clf,
@@ -95,11 +98,11 @@ if __name__ == '__main__':
                                     mode='similar',
                                     y=y_reg)
     binned = similar_reg.histogram(X)
-    binning.visualize_classic_binning(ax[0],
-                                             similar_reg,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax[0],
+                 similar_reg,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     ax[1].hexbin(X[:, 0],
                  X[:, 1],
                  C=y_reg,
