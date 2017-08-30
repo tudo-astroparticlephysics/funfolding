@@ -97,18 +97,17 @@ if __name__ == '__main__':
 
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) : (FRIST RUN)')
 
-    llh = ff.solution.StandardLLH()
+    llh = ff.solution.StandardLLH(tau=None,
+                                  C='thikonov',
+                                  neg_llh=False)
     llh.initialize(vec_g=vec_g,
-                   model=model,
-                   tau=None,
-                   C='thikonov',
-                   neg_llh=False)
+                   model=model)
 
     sol_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=2000,
                                            random_state=1337)
     sol_mcmc.initialize(llh=llh, model=model)
     sol_mcmc.set_x0_and_bounds()
-    vec_f_est_mcmc, sample, probs = sol_mcmc.fit()
+    vec_f_est_mcmc, sigma_vec_f, samples, probs = sol_mcmc.fit()
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
@@ -116,12 +115,11 @@ if __name__ == '__main__':
     print('{}\t{}'.format(str_0, str_1))
 
     print('\nMinimize Solution:')
-    llh = ff.solution.StandardLLH()
+    llh = ff.solution.StandardLLH(tau=None,
+                                  C='thikonov',
+                                  neg_llh=False)
     llh.initialize(vec_g=vec_g,
-                   model=model,
-                   tau=None,
-                   C='thikonov',
-                   neg_llh=True)
+                   model=model)
 
     sol_mini = ff.solution.LLHSolutionMinimizer()
     sol_mini.initialize(llh=llh, model=model)
