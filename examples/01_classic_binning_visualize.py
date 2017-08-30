@@ -3,7 +3,10 @@ import logging
 import numpy as np
 from matplotlib import pyplot as plt
 
-from funfolding import discretization
+from funfolding import binning
+from funfolding.visualization.visualize_classic_binning import plot_binning
+from funfolding.visualization.visualize_classic_binning import mark_bin
+
 
 if __name__ == '__main__':
     logging.captureWarnings(True)
@@ -19,34 +22,33 @@ if __name__ == '__main__':
     is_pos = X[: ,0] * X[:, 1] > 0
     y_clf[is_pos] = 0
     y_clf[~is_pos] = 1
-    #y_clf = np.array(y_clf >= 0, dtype=int)
     y_means = np.sqrt(X[:, 0]**2 + X[:, 0]**2)
     y_reg = np.random.normal(loc=y_means,
                              scale=0.3)
 
-    classic_binning = discretization.ClassicBinning(
+    classic_binning = binning.ClassicBinning(
         bins = [20, 20],
         range=[[-5, 5], [-5, 5]])
     classic_binning.fit(X)
     hist = classic_binning.histogram(X)
 
     fig, ax = plt.subplots()
-    discretization.visualize_classic_binning(ax,
-                                             classic_binning,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax,
+                 classic_binning,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     selected_bin = np.random.choice(list(classic_binning.i_to_t.keys()))
     neighbors = classic_binning.__get_neighbors__(selected_bin)
     for i in neighbors:
-        discretization.mark_bin(ax,
-                                classic_binning,
-                                i,
-                                color='r')
-    discretization.mark_bin(ax,
-                            classic_binning,
-                            selected_bin,
-                            color='w')
+        mark_bin(ax,
+                 classic_binning,
+                 i,
+                 color='r')
+    mark_bin(ax,
+             classic_binning,
+             selected_bin,
+             color='w')
     fig.savefig('01_marked_bins.png')
 
 
@@ -55,19 +57,19 @@ if __name__ == '__main__':
                                     min_samples=100,
                                     max_bins=None,
                                     mode='lowest')
-    discretization.visualize_classic_binning(ax,
-                                             lowest,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax,
+                 lowest,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     selected_bin = np.random.choice(list(lowest.i_to_t.keys()))
     neighbors = lowest.__get_neighbors__(selected_bin)
     for i in neighbors:
-        discretization.mark_bin(ax,
+        mark_bin(ax,
                                 lowest,
                                 i,
                                 color='r')
-    discretization.mark_bin(ax,
+    mark_bin(ax,
                             lowest,
                             selected_bin,
                             color='w')
@@ -80,22 +82,22 @@ if __name__ == '__main__':
                                     min_samples=100,
                                     max_bins=None,
                                     mode='closest')
-    discretization.visualize_classic_binning(ax,
-                                             closest,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax,
+                 closest,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     selected_bin = np.random.choice(list(closest.i_to_t.keys()))
     neighbors = closest.__get_neighbors__(selected_bin)
     for i in neighbors:
-        discretization.mark_bin(ax,
-                                closest,
-                                i,
-                                color='r')
-    discretization.mark_bin(ax,
-                            closest,
-                            selected_bin,
-                            color='w')
+        mark_bin(ax,
+                 closest,
+                 i,
+                 color='r')
+    mark_bin(ax,
+             closest,
+             selected_bin,
+             color='w')
 
     fig.savefig('01_marked_bins_merged_closest.png')
 
@@ -105,22 +107,22 @@ if __name__ == '__main__':
                                     max_bins=None,
                                     mode='similar',
                                     y=y_reg)
-    discretization.visualize_classic_binning(ax[0],
-                                             similar,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax[0],
+                 similar,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     selected_bin = np.random.choice(list(similar.i_to_t.keys()))
     neighbors = similar.__get_neighbors__(selected_bin)
     for i in neighbors:
-        discretization.mark_bin(ax[0],
-                                similar,
-                                i,
-                                color='r')
-    discretization.mark_bin(ax[0],
-                            similar,
-                            selected_bin,
-                            color='w')
+        mark_bin(ax[0],
+                 similar,
+                 i,
+                 color='r')
+    mark_bin(ax[0],
+             similar,
+             selected_bin,
+             color='w')
     ax[1].hexbin(X[:, 0],
                  X[:, 1],
                  C=y_reg,
@@ -136,22 +138,22 @@ if __name__ == '__main__':
                                     max_bins=None,
                                     mode='similar',
                                     y=y_clf)
-    discretization.visualize_classic_binning(ax[0],
-                                             similar,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax[0],
+                 similar,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     selected_bin = np.random.choice(list(similar.i_to_t.keys()))
     neighbors = similar.__get_neighbors__(selected_bin)
     for i in neighbors:
-        discretization.mark_bin(ax[0],
-                                similar,
-                                i,
-                                color='r')
-    discretization.mark_bin(ax[0],
-                            similar,
-                            selected_bin,
-                            color='w')
+        mark_bin(ax[0],
+                 similar,
+                 i,
+                 color='r')
+    mark_bin(ax[0],
+             similar,
+             selected_bin,
+             color='w')
     ax[1].hexbin(X[:, 0],
                  X[:, 1],
                  C=y_clf,
