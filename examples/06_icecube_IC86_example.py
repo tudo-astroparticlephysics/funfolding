@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-from funfolding import discretization, model, solution
+from funfolding import binning, model, solution
 
 import corner
 
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     binned_E_A = np.digitize(y_A, binning_E)
     binned_E_test = np.digitize(y_test, binning_E)
 
-    tree_binning_uniform = discretization.TreeBinningSklearn(
+    tree_binning_uniform = binning.TreeBinningSklearn(
         regression=False,
         max_features=None,
         min_samples_split=2,
@@ -100,7 +100,7 @@ if __name__ == '__main__':
         g=binned_g_test,
         f=binned_E_test)
 
-    boosted_binning_uniform = discretization.TreeBinningSklearn(
+    boosted_binning_uniform = binning.TreeBinningSklearn(
         regression=False,
         max_features=None,
         min_samples_split=2,
