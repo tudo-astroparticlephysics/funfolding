@@ -115,7 +115,7 @@ if __name__ == '__main__':
     print('\nMinimize Solution:')
     llh = ff.solution.StandardLLH(tau=None,
                                   C='thikonov',
-                                  neg_llh=False)
+                                  neg_llh=True)
     llh.initialize(vec_g=vec_g,
                    model=model)
 
