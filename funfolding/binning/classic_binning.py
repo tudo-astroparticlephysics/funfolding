@@ -106,7 +106,6 @@ class ClassicBinning(Binning):
         return clone
 
     def __merge__(self,
-<<<<<<< HEAD:funfolding/discretization/classic_binning.py
                   X,
                   min_samples=None,
                   max_bins=None,
@@ -115,17 +114,7 @@ class ClassicBinning(Binning):
                   right=False,
                   mode='closest',
                   **kwargs):
-=======
-                   X,
-                   min_samples=None,
-                   max_bins=None,
-                   sample_weight=None,
-                   y=None,
-                   right=False,
-                   mode='closest',
-                   **kwargs):
         super(ClassicBinning, self).merge()
->>>>>>> cleanup:funfolding/binning/classic_binning.py
         n_merg_iterations = 0
         binned = self.digitize(X, right=right)
         counted = np.bincount(binned,
