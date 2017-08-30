@@ -1,5 +1,4 @@
 import numpy as np
-from IPython import embed
 
 import funfolding as ff
 
@@ -57,9 +56,9 @@ if __name__ == '__main__':
     binned_g = np.digitize(unbinned_g, binning_g)
     binned_f = np.digitize(unbinned_f, binning_f)
 
-    model = ff.model.BasicLinearModel()
-    model.initialize(g=binned_g,
-                     f=binned_f)
+    model = ff.model.LinearModel()
+    model.initialize(digitized_obs=binned_g,
+                     digitized_truth=binned_f)
 
 
     solutions = np.zeros((n_pulls, len(binning_f)-1))
@@ -77,17 +76,14 @@ if __name__ == '__main__':
         binned_g = np.digitize(unbinned_g, binning_g)
         binned_f = np.digitize(unbinned_f, binning_f)
         vec_g, vec_f = model.generate_vectors(binned_g, binned_f)
-        llh_mcmc = ff.solution.LLHSolutionMCMC(n_used_steps=2000,
-                                               random_state=1337,
-                                               n_threads=2)
-        llh_mcmc.initialize(vec_g=vec_g, model=model)
-        vec_f_est_mcmc, sample, probs = llh_mcmc.run(tau=0)
+        llh = ff.solution.StandardLLH(tau=None,
+                                      C='thikonov',
+                                      neg_llh=False)
+        llh.initialize(vec_g=vec_g,
+                       model=model)
+
+        sol_mcmc = ff.solution.LLHSolutionMCMC()
+        sol_mcmc.initialize(llh=llh, model=model)
+        sol_mcmc.set_x0_and_bounds()
+        vec_f_est_mcmc, sigma_vec_f, samples, probs = sol_mcmc.fit()
         print(vec_f_est_mcmc)
-        solutions[i, :] = vec_f_est_mcmc
-        stds[i, :] = np.std(sample, axis=0)
-        quantils[i, :, :] = np.percentile(sample, q=[0.159, 0.839], axis=0).T
-
-    embed()
-
-
-

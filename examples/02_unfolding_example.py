@@ -1,8 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from IPython import embed
-
 import funfolding as ff
 
 from scipy.special import lambertw
@@ -151,16 +149,14 @@ if __name__ == '__main__':
     for f_i_est, f_i in zip(vec_f_est_mini, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
-    exit()
-    corner.corner(sample, truths=vec_f)
+
+    corner.corner(samples, truths=vec_f)
     plt.savefig('corner_truth.png')
     print(np.sum(vec_f_est_mcmc))
 
-    embed()
-
     plt.clf()
-    corner.corner(sample, truths=vec_f_est_mini, truth_color='r')
+    corner.corner(samples, truths=vec_f_est_mini, truth_color='r')
     plt.savefig('corner_mini.png')
     plt.clf()
-    corner.corner(sample, truths=vec_f_est_mcmc, truth_color='springgreen')
+    corner.corner(samples, truths=vec_f_est_mcmc, truth_color='springgreen')
     plt.savefig('corner_mcmc.png')
