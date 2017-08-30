@@ -1,10 +1,7 @@
-import logging
-
 import pandas as pd
 import numpy as np
-from matplotlib import pyplot as plt
 
-from funfolding import discretization, model, solution
+from funfolding import binning, model, solution
 
 
 def read_in(filename='Gamma_clas_sep.hdf5'):
@@ -63,22 +60,8 @@ if __name__ == '__main__':
     binned_E_test = np.digitize(df_test.MCorsikaEvtHeader_fTotalEnergy,
                            binning_E)
 
-    tree_binning = discretization.TreeBinningSklearn()
+    tree_binning = binning.TreeBinningSklearn()
     tree_binning.fit(X_tree_test, binned_E_test)
 
 
     print(tree_binning.tree.tree_.feature)
-    exit()
-
-
-
-
-
-    tree_binning = discretization.TreeBinning()
-
-    tree_binning.fit(X_tree_test, binned_E_test)
-    #import cProfile
-    #cProfile.run('tree_binning.fit(X_tree_test, binned_E_test)')
-
-    print(tree_binning.tree.feature)
-    print(tree_binning.tree.threshold)

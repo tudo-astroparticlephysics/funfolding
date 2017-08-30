@@ -4,7 +4,9 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 
-from funfolding import discretization, model, solution
+from funfolding import binning, model, solution
+from funfolding.visualization.visualize_classic_binning import plot_binning
+from funfolding.visualization.visualize_classic_binning import mark_bin
 
 import corner
 
@@ -49,16 +51,16 @@ if __name__ == '__main__':
                            binning_E)
     binned_E_test = np.digitize(df_test.MCorsikaEvtHeader_fTotalEnergy,
                            binning_E)
-    classic_binning = discretization.ClassicBinning(
+    classic_binning = binning.ClassicBinning(
         bins = [15, 25])
     classic_binning.fit(X)
 
     fig, ax = plt.subplots()
-    discretization.visualize_classic_binning(ax,
-                                             classic_binning,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax,
+                 classic_binning,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     fig.savefig('05_fact_example_original_binning.png')
 
     closest = classic_binning.merge(X_test,
@@ -66,11 +68,11 @@ if __name__ == '__main__':
                                     max_bins=None,
                                     mode='closest')
     fig, ax = plt.subplots()
-    discretization.visualize_classic_binning(ax,
-                                             closest,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    plot_binning(ax,
+                 closest,
+                 X,
+                 log_c=False,
+                 cmap='viridis')
     fig.savefig('05_fact_example_original_binning_closest.png')
 
     unmerged_model = model.BasicLinearModel()
@@ -127,7 +129,7 @@ if __name__ == '__main__':
     X_tree = df_A.get(tree_obs).values
     X_tree_test = df_test.get(tree_obs).values
 
-    tree_binning = discretization.TreeBinningSklearn(
+    tree_binning = binning.TreeBinningSklearn(
         regression=False,
         max_features=None,
         min_samples_split=2,
