@@ -153,8 +153,8 @@ class LLHSolutionMCMC(Solution):
                  n_threads=1,
                  random_state=None):
         super(LLHSolutionMCMC, self).__init__()
-        if not isinstance(random_state, np.random.RandomState):
-            random_state = np.random.RandomState(random_state)
+        if not isinstance(random_state, np.random.mtrand.RandomState):
+            random_state = np.random.mtrand.RandomState(random_state)
         self.random_state = random_state
 
         self.n_walker = n_walker
@@ -199,7 +199,7 @@ class LLHSolutionMCMC(Solution):
     def __run_mcmc__(self, sampler, x0, n_steps):
         sampler.run_mcmc(pos0=x0,
                          N=n_steps,
-                         rstate0=self.random_state)
+                         rstate0=self.random_state.get_state())
         samples = sampler.chain[:, self.n_burn_steps:, :]
         samples = samples.reshape((-1, self.model.dim_f))
 
