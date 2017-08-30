@@ -7,15 +7,15 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from collections import Counter
 
 
-def visualize_classic_binning(ax,
-                              binning,
-                              X,
-                              sample_weight=None,
-                              cmap='viridis',
-                              linecolor='0.5',
-                              linewidth=1.,
-                              log_c=False,
-                              zorder=5):
+def plot_binning(ax,
+                 binning,
+                 X,
+                 sample_weight=None,
+                 cmap='viridis',
+                 linecolor='0.5',
+                 linewidth=1.,
+                 log_c=False,
+                 zorder=5):
     if binning.n_dims != 2:
         raise binning.InvalidDimension
     counted = binning.histogram(X, sample_weight=sample_weight)

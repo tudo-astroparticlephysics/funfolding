@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from matplotlib import pyplot as plt
 
-from funfolding import discretization
+from funfolding import binning
 
 if __name__ == '__main__':
     logging.captureWarnings(True)
@@ -24,17 +24,17 @@ if __name__ == '__main__':
     y_reg = np.random.normal(loc=y_means,
                              scale=0.3)
 
-    classic_binning = discretization.ClassicBinning(
+    classic_binning = binning.ClassicBinning(
         bins = [25, 25],
         range=[[-5, 5], [-5, 5]])
-    classic_binning.fit(X)
+    classic_binning.initialize(X)
 
     fig, ax = plt.subplots()
-    discretization.visualize_classic_binning(ax,
-                                             classic_binning,
-                                             X,
-                                             log_c=False,
-                                             cmap='viridis')
+    binning.visualize_classic_binning(ax,
+                                      classic_binning,
+                                      X,
+                                      log_c=False,
+                                      cmap='viridis')
     fig.savefig('00_example_gaussian_unmerged.png')
 
     threshold = 50
@@ -45,7 +45,7 @@ if __name__ == '__main__':
                                     mode='closest')
     binned = closest.histogram(X)
     fig, ax = plt.subplots()
-    discretization.visualize_classic_binning(ax,
+    binning.visualize_classic_binning(ax,
                                              closest,
                                              X,
                                              log_c=False,
@@ -58,7 +58,7 @@ if __name__ == '__main__':
                                    mode='lowest')
     binned = lowest.histogram(X)
     fig, ax = plt.subplots()
-    discretization.visualize_classic_binning(ax,
+    binning.visualize_classic_binning(ax,
                                              lowest,
                                              X,
                                              log_c=False,
@@ -74,7 +74,7 @@ if __name__ == '__main__':
                                         mode='similar',
                                         y=y_clf)
     binned = similar_clf.histogram(X)
-    discretization.visualize_classic_binning(ax[0],
+    binning.visualize_classic_binning(ax[0],
                                              similar_clf,
                                              X,
                                              log_c=False,
@@ -88,9 +88,6 @@ if __name__ == '__main__':
     ax[1].set_ylim([-5, 5])
     fig.savefig('00_example_gaussian_similar_clf.png')
 
-
-
-
     fig, ax = plt.subplots(1, 2, figsize=(24, 9))
     similar_reg = classic_binning.merge(X,
                                     min_samples=threshold,
@@ -98,7 +95,7 @@ if __name__ == '__main__':
                                     mode='similar',
                                     y=y_reg)
     binned = similar_reg.histogram(X)
-    discretization.visualize_classic_binning(ax[0],
+    binning.visualize_classic_binning(ax[0],
                                              similar_reg,
                                              X,
                                              log_c=False,
