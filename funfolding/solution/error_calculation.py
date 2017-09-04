@@ -19,11 +19,13 @@ def calc_feldman_cousins_errors(best_fit, sample, interval=0.68):
 def calc_feldman_cousins_errors_binned(best_fit,
                                        sample,
                                        interval=0.68,
-                                       eps=1e-2):
+                                       eps=1e-2,
+                                       percentiles=[10,90]):
     sigma_vec_best = np.zeros((2, len(best_fit)))
     for i, best_fit_i in enumerate(best_fit):
-        eps_i = best_fit_i * eps
         sample_i = sample[:, i]
+        percentile_i = np.percentile(sample_i, percentiles)
+        eps_i = percentile_i * eps
         min_s = np.min(sample_i)
         max_s = np.max(sample_i)
 
