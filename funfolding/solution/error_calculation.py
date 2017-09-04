@@ -25,7 +25,9 @@ def calc_feldman_cousins_errors_binned(best_fit,
     for i, best_fit_i in enumerate(best_fit):
         sample_i = sample[:, i]
         percentile_i = np.percentile(sample_i, percentiles)
-        eps_i = percentile_i * eps
+        range_percent = percentile_i[1] - percentile_i[0]
+        eps_i = range_percent * eps
+        print(eps_i)
         min_s = np.min(sample_i)
         max_s = np.max(sample_i)
 
