@@ -44,12 +44,12 @@ def split_mc_test_unfolding(n_pulls,
     if (n_events_test + n_events_binning + n_events_A) > n_events_mc:
         raise ValueError("'n_events_test' + 'n_events_binning' + 'n_events_A' "
                          "has to be smaller than n_events_mc")
-    n_events_test_pulls = np.random.poisson(n_events_test,
+    n_events_test_pulls = random_state.poisson(n_events_test,
                                             size=n_pulls)
     idx = np.arange(n_events_mc)
 
     for n_events_test_i in n_events_test_pulls:
-        np.random.shuffle(idx)
+        random_state.shuffle(idx)
         test_idx = np.sort(idx[:n_events_test_i])
         train_idx = idx[n_events_test_i:]
 
