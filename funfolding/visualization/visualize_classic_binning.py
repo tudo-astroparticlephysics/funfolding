@@ -92,6 +92,7 @@ def plot_binning(ax,
                                      cmap=cmap,
                                      norm=norm)
 
+
 def mark_bin(ax, binning, i_label, color='r', linewidth=1., zorder=6):
     t_labels = binning.i_to_t[i_label]
     if isinstance(t_labels, tuple):
@@ -137,4 +138,3 @@ def mark_bin(ax, binning, i_label, color='r', linewidth=1., zorder=6):
                     color=color,
                     ls='-',
                     zorder=zorder)
-

@@ -44,9 +44,9 @@ class ClassicBinning(Binning):
             self.random_state = random_state
 
     def initialize(self,
-            X,
-            y=None,
-            sample_weight=None):
+                   X,
+                   y=None,
+                   sample_weight=None):
         super(ClassicBinning, self).initialize()
         for dim_i in range(self.n_dims):
             if sample_weight is None:
@@ -86,8 +86,12 @@ class ClassicBinning(Binning):
                       for edges_i in self.edges]
         indices = itertools.product(*range_list)
         self.t_to_i = {x: i for i, x in enumerate(indices)}
-        is_oor = lambda tup_i: any(np.array(tup_i) == 0) or \
-            any([t == len(self.edges[i]) for i, t in enumerate(tup_i)])
+
+        def is_oor(tup_i):
+            lower = any(np.array(tup_i) == 0)
+            upper = any([t == len(self.edges[i]) for i, t in enumerate(tup_i)])
+            return lower or upper
+
         self.i_to_t = {self.t_to_i[t]: t for t in self.t_to_i.keys()}
         self.oor_tuples = set(t for t in self.t_to_i.keys() if is_oor(t))
 

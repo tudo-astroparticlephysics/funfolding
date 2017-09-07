@@ -3,4 +3,3 @@ from .classic_binning import ClassicBinning
 
 __all__ = ['TreeBinningSklearn',
            'ClassicBinning']
-

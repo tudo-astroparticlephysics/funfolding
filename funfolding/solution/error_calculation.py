@@ -20,7 +20,7 @@ def calc_feldman_cousins_errors_binned(best_fit,
                                        sample,
                                        interval=0.68,
                                        eps=1e-2,
-                                       percentiles=[10,90]):
+                                       percentiles=[10, 90]):
     sigma_vec_best = np.zeros((2, len(best_fit)))
     for i, best_fit_i in enumerate(best_fit):
         sample_i = sample[:, i]

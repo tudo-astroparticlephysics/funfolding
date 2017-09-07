@@ -407,7 +407,7 @@ class TreeBinningSklearn(Binning):
         """
         if self.merged:
             warnings.warn('The model was merged after the trainng and '
-                        'might give unreasonable predictions.')
+                          'might give unreasonable predictions.')
         return self.tree.predict(X)
 
     def predict_proba(self, X):
@@ -437,7 +437,7 @@ class TreeBinningSklearn(Binning):
         """
         if self.merged:
             warnings.warn('The model was merged after the trainng and '
-                        'might give unreasonable predictions.')
+                          'might give unreasonable predictions.')
         if self.regression:
             raise RuntimeError('Can only be used for a classification!')
         return self.tree.predict_proba(X)
@@ -523,7 +523,6 @@ class TreeBinningSklearn(Binning):
         else:
             clone = self.copy()
             return clone.__merge__(X=X, threshold=threshold)
-
 
     def __merge__(self, X, threshold):
         super(TreeBinningSklearn, self).merge()

@@ -59,9 +59,9 @@ class SVDSolution(Solution):
         elif isinstance(tau, int):
             if tau > model.dim_f:
                 warnings.warn('Number of used singular values is '
-                                 'greater than the total number of '
-                                 'singular values. The solution will be '
-                                 'unregularized!')
+                              'greater than the total number of '
+                              'singular values. The solution will be '
+                              'unregularized!')
                 self.tau = np.ones(model.dim_f)
             else:
                 self.tau = np.ones(model.dim_f)
@@ -124,9 +124,9 @@ class LLHSolutionMinimizer(Solution):
     def fit(self, constrain_N=True):
         super(LLHSolutionMinimizer, self).fit()
         if constrain_N:
-            cons = (
-                {'type': 'eq',
-                 'fun': lambda x: np.absolute(np.sum(x) - np.sum(self.x0))})
+            cons = ({
+                'type': 'eq',
+                'fun': lambda x: np.absolute(np.sum(x) - np.sum(self.x0))})
         else:
             cons = ()
         solution = minimize(fun=self.llh.evaluate_llh,
@@ -169,7 +169,6 @@ class LLHSolutionMCMC(Solution):
         self.llh = llh
         self.vec_g = llh.vec_g
         self.model = model
-
 
     def set_x0_and_bounds(self, x0=None, bounds=False):
         super(LLHSolutionMCMC, self).set_x0_and_bounds()

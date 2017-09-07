@@ -117,7 +117,7 @@ def split_test_unfolding(n_iterations,
         raise ValueError("'n_events_test' + 'n_events_binning' + 'n_events_A' "
                          "has to be smaller than n_events_total")
     n_events_test_pulls = random_state.poisson(n_events_test,
-                                            size=n_iterations)
+                                               size=n_iterations)
     idx = np.arange(n_events_total)
 
     if sample_weight is not None and global_max_weight:
