@@ -1,11 +1,16 @@
 import numpy as np
 import copy
+from distutils.version import LooseVersion, StrictVersion
 
+import sklearn
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
 
 from ._binning import Binning
 import warnings
+
+
+old_sklean = StrictVersion("0.19.0") >= StrictVersion(sklearn.__version__)
 
 
 def __sample_uniform__(y, sample_weight=None):
@@ -193,9 +198,17 @@ class TreeBinningSklearn(Binning):
         the input samples) required to be at a leaf node. Samples have
         equal weight when sample_weight is not provided.
 
-    min_impurity_split : float, optional (default=1e-7), optional
-        Threshold for early stopping in tree growth. If the impurity
-        of a node is below the threshold, the node is a leaf.
+    min_impurity_decrease : float, optional (default=0.)
+        A node will be split if this split induces a decrease of the impurity
+        greater than or equal to this value.
+        The weighted impurity decrease equation is the following::
+            N_t / N * (impurity - N_t_R / N_t * right_impurity
+                                - N_t_L / N_t * left_impurity)
+        where ``N`` is the total number of samples, ``N_t`` is the number of
+        samples at the current node, ``N_t_L`` is the number of samples in the
+        left child, and ``N_t_R`` is the number of samples in the right child.
+        ``N``, ``N_t``, ``N_t_R`` and ``N_t_L`` all refer to the weighted sum,
+        if ``sample_weight`` is passed.
 
     boosted : None or name of boosting algorithm, optional (default=None)
         If None no boosting is used. For boosting set to the name of
@@ -252,7 +265,7 @@ class TreeBinningSklearn(Binning):
                  min_samples_leaf=1,
                  max_leaf_nodes=None,
                  min_weight_fraction_leaf=0.,
-                 min_impurity_split=1e-7,
+                 min_impurity_decrease=0.,
                  boosted=None,
                  n_estimators=50,
                  learning_rate=1.0,
@@ -264,16 +277,28 @@ class TreeBinningSklearn(Binning):
         self.random_state = random_state
         self.regression = regression
         if regression:
-
-            self.tree = DecisionTreeRegressor(
-                max_depth=max_depth,
-                min_samples_split=min_samples_split,
-                min_samples_leaf=min_samples_leaf,
-                max_leaf_nodes=max_leaf_nodes,
-                max_features=max_features,
-                min_impurity_split=min_impurity_split,
-                min_weight_fraction_leaf=min_weight_fraction_leaf,
-                random_state=random_state)
+            if old_sklean:
+                if min_impurity_decrease != 0.:
+                    warnings.warn('min_impurity_decrease is supported '
+                                  ' only in sklearn version >= 0.19.0')
+                self.tree = DecisionTreeRegressor(
+                    max_depth=max_depth,
+                    min_samples_split=min_samples_split,
+                    min_samples_leaf=min_samples_leaf,
+                    max_leaf_nodes=max_leaf_nodes,
+                    max_features=max_features,
+                    min_weight_fraction_leaf=min_weight_fraction_leaf,
+                    random_state=random_state)
+            else:
+                self.tree = DecisionTreeRegressor(
+                    max_depth=max_depth,
+                    min_samples_split=min_samples_split,
+                    min_samples_leaf=min_samples_leaf,
+                    max_leaf_nodes=max_leaf_nodes,
+                    max_features=max_features,
+                    min_impurity_decrease=min_impurity_decrease,
+                    min_weight_fraction_leaf=min_weight_fraction_leaf,
+                    random_state=random_state)
             if boosted in ['linear', 'square', 'exponential']:
                 self.boosted = AdaBoostRegressor(
                     base_estimator=self.tree,
@@ -290,15 +315,28 @@ class TreeBinningSklearn(Binning):
             else:
                 self.boosted = None
         else:
-            self.tree = DecisionTreeClassifier(
-                max_depth=max_depth,
-                min_samples_split=min_samples_split,
-                min_samples_leaf=min_samples_leaf,
-                max_leaf_nodes=max_leaf_nodes,
-                max_features=max_features,
-                min_weight_fraction_leaf=min_weight_fraction_leaf,
-                min_impurity_split=min_impurity_split,
-                random_state=random_state)
+            if old_sklean:
+                if min_impurity_decrease != 0.:
+                    warnings.warn('min_impurity_decrease is supported '
+                                  ' only in sklearn version >= 0.19.0')
+                self.tree = DecisionTreeRegressor(
+                    max_depth=max_depth,
+                    min_samples_split=min_samples_split,
+                    min_samples_leaf=min_samples_leaf,
+                    max_leaf_nodes=max_leaf_nodes,
+                    max_features=max_features,
+                    min_weight_fraction_leaf=min_weight_fraction_leaf,
+                    random_state=random_state)
+            else:
+                self.tree = DecisionTreeClassifier(
+                    max_depth=max_depth,
+                    min_samples_split=min_samples_split,
+                    min_samples_leaf=min_samples_leaf,
+                    max_leaf_nodes=max_leaf_nodes,
+                    max_features=max_features,
+                    min_weight_fraction_leaf=min_weight_fraction_leaf,
+                    min_impurity_decrease=min_impurity_decrease,
+                    random_state=random_state)
             if boosted in ['SAMME', 'SAMME.R']:
                 self.boosted = AdaBoostClassifier(
                     base_estimator=self.tree,
