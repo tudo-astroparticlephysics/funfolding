@@ -1,6 +1,6 @@
 import numpy as np
 import copy
-from distutils.version import LooseVersion, StrictVersion
+from distutils.version import StrictVersion
 
 import sklearn
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -319,7 +319,7 @@ class TreeBinningSklearn(Binning):
                 if min_impurity_decrease != 0.:
                     warnings.warn('min_impurity_decrease is supported '
                                   ' only in sklearn version >= 0.19.0')
-                self.tree = DecisionTreeRegressor(
+                self.tree = DecisionTreeClassifier(
                     max_depth=max_depth,
                     min_samples_split=min_samples_split,
                     min_samples_leaf=min_samples_leaf,
