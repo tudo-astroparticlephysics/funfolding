@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import logging
 
 import numpy as np
 
 
 def sample_distribution(weights, max_w=None, random_state=None):
+    logging.debug('Running sample_distribution with max_w={}'.format(max_w))
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
     if max_w is None:
@@ -127,18 +129,20 @@ def split_test_unfolding(n_iterations,
         random_state.shuffle(idx)
         test_idx = np.sort(idx[:n_events_test_i])
         if sample_test and sample_weight is not None:
-            test_idx = sample_distribution(sample_weight[test_idx],
+            selected = sample_distribution(sample_weight[test_idx],
                                            max_w=max_w,
                                            random_state=random_state)
+            test_idx = test_idx[selected]
         train_idx = idx[n_events_test_i:]
         if n_events_binning > 0:
             binning_slice = slice(None, n_events_binning)
             A_slice = slice(n_events_binning, None)
             binning_idx = np.sort(train_idx[binning_slice])
             if sample_binning and sample_weight is not None:
-                binning_idx = sample_distribution(sample_weight[binning_idx],
-                                                  max_w=max_w,
-                                                  random_state=random_state)
+                selected = sample_distribution(sample_weight[binning_idx],
+                                               max_w=max_w,
+                                               random_state=random_state)
+                binning_idx = binning_idx[selected]
             train_idx = train_idx[A_slice]
         else:
             binning_idx = None
@@ -147,9 +151,10 @@ def split_test_unfolding(n_iterations,
         else:
             A_idx = np.sort(train_idx[:n_events_A])
         if sample_A and sample_weight is not None:
-            A_idx = sample_distribution(sample_weight[A_idx],
-                                        max_w=max_w,
-                                        random_state=random_state)
+            selected = sample_distribution(sample_weight[A_idx],
+                                           max_w=max_w,
+                                           random_state=random_state)
+            A_idx = A_idx[selected]
         if binning_idx is None:
             yield test_idx, A_idx
         else:
