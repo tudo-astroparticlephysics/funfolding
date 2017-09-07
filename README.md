@@ -1,4 +1,4 @@
-FUNFOLDING
+FUNFOLDING [![Build Status](https://travis-ci.org/mbrner/funfolding.svg?branch=master)](https://travis-ci.org/mbrner/funfolding)
 ===========
 
 Fun, Fun, Fun
