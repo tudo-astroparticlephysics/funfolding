@@ -142,7 +142,6 @@ class LLHSolutionMinimizer(Solution):
         return solution, V_f_est
 
 
-
 class GradientDescentSolution(LLHSolutionMinimizer):
     name = 'GradientDescentSolution'
     status_need_for_fit = 1
