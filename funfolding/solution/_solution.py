@@ -142,6 +142,39 @@ class LLHSolutionMinimizer(Solution):
         return solution, V_f_est
 
 
+
+class GradientDescentSolution(LLHSolutionMinimizer):
+    name = 'GradientDescentSolution'
+    status_need_for_fit = 1
+
+    def __init__(self, n_steps=50):
+        super(GradientDescentSolution, self).__init__()
+        warnings.warn('Not fully tested!')
+        self.n_steps = n_steps
+
+    def fit(self, constrain_N=True):
+        super(GradientDescentSolution, self).fit()
+
+        x = np.zeros((self.n_steps, len(self.x0)))
+        llh = np.zeros(self.n_steps)
+        gradient = np.zeros((self.n_steps, len(self.x0)))
+        hessian = np.zeros((self.n_steps, len(self.x0), len(self.x0)))
+
+        x[0, :] = self.x0
+        llh[0] = self.llh.evaluate_llh(self.x0)
+        gradient[0, :] = self.llh.evaluate_gradient(self.x0)
+        hessian[0, :, :] = self.llh.evaluate_hessian(self.x0)
+
+        for i in range(1, self.n_steps):
+            H_inv = linalg.inv(hessian[i-1])
+            delta_x = -np.dot(H_inv, gradient[i-1, :])
+            x[i, :] = x[i - 1, :] + delta_x
+            llh[i] = self.llh.evaluate_llh(x[i, :])
+            gradient[i, :] = self.llh.evaluate_gradient(x[i, :])
+            hessian[i, :, :] = self.llh.evaluate_hessian(x[i, :])
+        return x, llh, gradient, hessian
+
+
 class LLHSolutionMCMC(Solution):
     name = 'LLHSolutionMCMC'
     status_need_for_fit = 1
