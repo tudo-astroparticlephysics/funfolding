@@ -30,7 +30,7 @@ class LLH(object):
         self.model = None
 
         self.gradient_defined = False
-        self.hesse_matrix_defined = False
+        self.hessian_matrix_defined = False
 
     def initialize(self):
         self.status = 0
@@ -48,13 +48,13 @@ class LLH(object):
         else:
             raise NotImplementedError("Gradients are not implemented!")
 
-    def evaluate_hesse_matrix(self):
-        if self.hesse_matrix_defined:
+    def evaluate_hessian(self):
+        if self.hessian_matrix_defined:
             if self.status < 0:
                 raise RuntimeError("LLH has to be intilized. "
                                    "Run 'LLH.initialize' first!")
         else:
-            raise NotImplementedError("Hesse Matrix is not implemented!")
+            raise NotImplementedError("hessian Matrix is not implemented!")
 
     def __call__(self, f):
         return self.evaluate_llh(f)
@@ -125,7 +125,7 @@ class StandardLLH(LLH):
 
         if isinstance(model, LinearModel):
             self.gradient_defined = True
-            self.hesse_matrix_defined = True
+            self.hessian_matrix_defined = True
 
     def evaluate_llh(self, f):
         super(StandardLLH, self).evaluate_llh()
@@ -145,24 +145,32 @@ class StandardLLH(LLH):
 
     def evaluate_gradient(self, f):
         super(StandardLLH, self).evaluate_gradient()
-        warnings.warn('Gradient is not tested!')
         g_est, f, f_reg = self.model.evaluate(f)
         h_unreg = np.sum(self.model.A, axis=0)
         part_b = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
         h_unreg -= part_b
-        regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
-            self.C, f_reg)
-        return h_unreg + regularization_part * self.factor
+        if self._tau is not None:
+            f_reg_used = f_reg * self.vec_acceptance
+            if self.log_f_reg:
+                f_reg_used = np.log10(f_reg_used + 1)
+            regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
+                self.C, f_reg_used)
+        else:
+            regularization_part = 0.
+        return (h_unreg + regularization_part) * self.factor
 
-    def evaluate_hesse_matrix(self, f):
-        raise NotImplementedError  # Bugged!
-        super(StandardLLH, self).evaluate_hesse_matrix()
-        warnings.warn('Gradient is not tested!')
+    def evaluate_hessian(self, f):
+        super(StandardLLH, self).evaluate_hessian()
         g_est, f, f_reg = self.model.evaluate(f)
         H_unreg = np.dot(np.dot(self.model.A.T,
                                 np.diag(self.vec_g / g_est**2)),
                          self.model.A)
-        return ((self.tau * self.C) + H_unreg) * self.factor
+        if self._tau is not None:
+            regularization_part = self.tau * self.C
+        else:
+            regularization_part = 0.
+
+        return (H_unreg + regularization_part) * self.factor
 
 
 class LLHThikonovForLoops:
@@ -210,7 +218,7 @@ class LLHThikonovForLoops:
             gradient[k] = reg_part - poisson_part
         return gradient
 
-    def evaluate_hesse_matrix(self, f):
+    def evaluate_hessian(self, f):
         m, n = self.linear_model.A.shape
         hess = np.zeros((n, n))
         for k in range(n):
