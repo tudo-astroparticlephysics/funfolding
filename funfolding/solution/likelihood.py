@@ -141,6 +141,9 @@ class StandardLLH(LLH):
             regularization_part = 0
         return (poisson_part - regularization_part) * self.factor
 
+    def evaluate_neg_llh(self, f):
+        return self.evaluate_llh(f) * -1.
+
     def evaluate_gradient(self, f):
         super(StandardLLH, self).evaluate_gradient()
         g_est, f, f_reg = self.model.evaluate(f)
@@ -157,6 +160,9 @@ class StandardLLH(LLH):
             regularization_part = 0.
         return (h_unreg + regularization_part) * self.factor
 
+    def evaluate_neg_gradient(self, f):
+        return self.evaluate_gradient(f) * -1.
+
     def evaluate_hessian(self, f):
         super(StandardLLH, self).evaluate_hessian()
         g_est, f, f_reg = self.model.evaluate(f)
@@ -170,6 +176,8 @@ class StandardLLH(LLH):
 
         return (H_unreg + regularization_part) * self.factor
 
+    def evaluate_neg_hessian(self, f):
+        return self.evaluate_hessian(f) * -1.
 
 class LLHThikonovForLoops:
     def __init__(self, g, linear_model, tau):

@@ -112,6 +112,7 @@ class LLHSolutionMinimizer(Solution):
         if x0 is None:
             x0 = self.model.generate_fit_x0(self.vec_g)
         if bounds is None:
+            print('bounds generated')
             bounds = self.model.generate_fit_bounds(self.vec_g)
         elif isinstance(bounds, bool):
             if bounds:
@@ -146,13 +147,19 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
     name = 'LLHSolutionGradientDescent'
     status_need_for_fit = 1
 
-    def __init__(self, n_steps=50):
+    def __init__(self, n_steps=500, gamma=0.01):
         super(LLHSolutionGradientDescent, self).__init__()
         warnings.warn('Not fully tested!')
         self.n_steps = n_steps
+        if gamma <= 0.:
+            raise ValueError('\'gamma\' has to be > 0!')
+        self.gamma = gamma
 
-    def fit(self, constrain_N=True):
-        super(LLHSolutionGradientDescent, self).fit()
+    def fit(self):
+        super(LLHSolutionMinimizer, self).fit()
+
+        bounds = np.array(self.bounds)
+        print(bounds)
 
         x = np.zeros((self.n_steps, len(self.x0)))
         llh = np.zeros(self.n_steps)
@@ -164,9 +171,10 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
         gradient[0, :] = self.llh.evaluate_gradient(self.x0)
         hessian[0, :, :] = self.llh.evaluate_hessian(self.x0)
 
+
         for i in range(1, self.n_steps):
             H_inv = linalg.inv(hessian[i-1])
-            delta_x = -np.dot(H_inv, gradient[i-1, :])
+            delta_x = -np.dot(H_inv, gradient[i-1, :]) * self.gamma
             x[i, :] = x[i - 1, :] + delta_x
             llh[i] = self.llh.evaluate_llh(x[i, :])
             gradient[i, :] = self.llh.evaluate_gradient(x[i, :])
