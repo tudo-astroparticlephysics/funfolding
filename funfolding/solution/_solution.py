@@ -130,13 +130,13 @@ class LLHSolutionMinimizer(Solution):
                 'fun': lambda x: np.absolute(np.sum(x) - np.sum(self.x0))})
         else:
             cons = ()
-        solution = minimize(fun=self.llh.evaluate_llh,
+        solution = minimize(fun=self.llh.evaluate_neg_llh,
                             x0=self.x0,
                             bounds=self.bounds,
                             method='SLSQP',
                             constraints=cons)
         try:
-            hess_matrix = self.llh.evaluate_hesse_matrix(solution.x)
+            hess_matrix = self.llh.evaluate_neg_hesse_matrix(solution.x)
             V_f_est = linalg.inv(hess_matrix)
         except NotImplementedError:
             V_f_est = None

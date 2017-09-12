@@ -66,15 +66,10 @@ class StandardLLH(LLH):
                  tau=None,
                  C='thikonov',
                  vec_acceptance=None,
-                 log_f=False,
-                 neg_llh=True):
+                 log_f=False):
         super(StandardLLH, self).__init__()
         self.C = C
         self.tau = tau
-        if neg_llh:
-            self.factor = 1.
-        else:
-            self.factor = -1.
         self.log_f_reg = log_f
         self.vec_acceptance = vec_acceptance
 
@@ -129,17 +124,17 @@ class StandardLLH(LLH):
         super(StandardLLH, self).evaluate_llh()
         g_est, f, f_reg = self.model.evaluate(f)
         if any(g_est < 0) or any(f < 0):
-            return np.inf * self.factor
-        poisson_part = np.sum(g_est - self.vec_g * np.log(g_est))
+            return np.inf * -1
+        poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
         if self._tau is not None:
             f_reg_used = f_reg * self.vec_acceptance
             if self.log_f_reg:
                 f_reg_used = np.log10(f_reg_used + 1)
-            regularization_part = 0.5 * np.dot(
+            regularization_part = -0.5 * np.dot(
                 np.dot(f_reg_used.T, self._C), f_reg_used)
         else:
             regularization_part = 0
-        return (poisson_part - regularization_part) * self.factor
+        return poisson_part - regularization_part
 
     def evaluate_neg_llh(self, f):
         return self.evaluate_llh(f) * -1.
@@ -147,8 +142,8 @@ class StandardLLH(LLH):
     def evaluate_gradient(self, f):
         super(StandardLLH, self).evaluate_gradient()
         g_est, f, f_reg = self.model.evaluate(f)
-        h_unreg = np.sum(self.model.A, axis=0)
-        part_b = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
+        part_b = np.sum(self.model.A, axis=0)
+        h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
         h_unreg -= part_b
         if self._tau is not None:
             f_reg_used = f_reg * self.vec_acceptance
@@ -158,7 +153,7 @@ class StandardLLH(LLH):
                 self.C, f_reg_used)
         else:
             regularization_part = 0.
-        return (h_unreg + regularization_part) * self.factor
+        return h_unreg - regularization_part
 
     def evaluate_neg_gradient(self, f):
         return self.evaluate_gradient(f) * -1.
@@ -166,15 +161,15 @@ class StandardLLH(LLH):
     def evaluate_hessian(self, f):
         super(StandardLLH, self).evaluate_hessian()
         g_est, f, f_reg = self.model.evaluate(f)
-        H_unreg = np.dot(np.dot(self.model.A.T,
-                                np.diag(self.vec_g / g_est**2)),
-                         self.model.A)
+        H_unreg = -np.dot(np.dot(self.model.A.T,
+                                 np.diag(self.vec_g / g_est**2)),
+                          self.model.A)
         if self._tau is not None:
             regularization_part = self.tau * self.C
         else:
             regularization_part = 0.
 
-        return (H_unreg + regularization_part) * self.factor
+        return H_unreg - regularization_part
 
     def evaluate_neg_hessian(self, f):
         return self.evaluate_hessian(f) * -1.

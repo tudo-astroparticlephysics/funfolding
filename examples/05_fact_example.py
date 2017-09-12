@@ -202,19 +202,18 @@ if __name__ == '__main__':
     vec_g, vec_f = tree_model.generate_vectors(binned_g_test,
                                                binned_E_test)
 
-    neg_llh = solution.StandardLLH(tau=None,
-                               C='thikonov',
-                               neg_llh=False)
-    neg_llh.initialize(vec_g=vec_g,
-                       model=tree_model)
+    llh = solution.StandardLLH(tau=None,
+                               C='thikonov')
+    llh.initialize(vec_g=vec_g,
+                    model=tree_model)
 
 
     sol_gd = solution.LLHSolutionGradientDescent(n_steps=1000,
                                                  gamma=0.01)
-    sol_gd.initialize(llh=neg_llh, model=tree_model)
+    sol_gd.initialize(llh=llh, model=tree_model)
     sol_gd.set_x0_and_bounds()
-    x, llh, gradient, hessian = sol_gd.fit()
-    idx_best = np.argmax(llh)
+    x, llh_values, gradient, hessian = sol_gd.fit()
+    idx_best = np.argmax(llh_values)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(x[idx_best], vec_f):
@@ -222,16 +221,49 @@ if __name__ == '__main__':
     print('{}\t{}'.format(str_0, str_1))
     covariance = linalg.inv(hessian[-1] * -1)
     print(np.sqrt(np.diag(covariance)))
-    exit()
 
+    def create_llh_slice(llh, best_fit, selected_bin=None):
+        if selected_bin is None:
+            selected_bin = np.argmax(best_fit)
+        points = np.linspace(0.9 * best_fit[selected_bin],
+                             1.1 * best_fit[selected_bin],
+                             101)
+        llh_values = np.zeros_like(points)
+        gradient_values = np.zeros_like(points)
+        hessian_values = np.zeros_like(points)
 
+        fig, [ax_grad, ax_hess] = plt.subplots(2, 1, figsize=(24, 18))
+        diff = np.diff(points)[0] / 2.
+        for i, p_i in enumerate(points):
+            best_fit[selected_bin] = p_i
+            llh_values[i] = llh.evaluate_llh(best_fit)
+            gradient_values[i] = llh.evaluate_gradient(best_fit)[selected_bin]
+            hessian_values[i] = llh.evaluate_hessian(best_fit)[selected_bin,
+                                                               selected_bin]
+            lower_x = p_i - diff
+            upper_x = p_i + diff
 
+            grad_lower_y = llh_values[i] - (diff * gradient_values[i])
+            grad_upper_y = llh_values[i] + (diff * gradient_values[i])
 
-    llh = solution.StandardLLH(tau=None,
-                               C='thikonov',
-                               neg_llh=False)
-    llh.initialize(vec_g=vec_g,
-                   model=tree_model)
+            hess_lower_y = gradient_values[i] - (diff * hessian_values[i])
+            hess_upper_y = gradient_values[i] + (diff * hessian_values[i])
+
+            ax_grad.plot([lower_x, upper_x],
+                         [grad_lower_y, grad_upper_y],
+                         'k-')
+
+            ax_hess.plot([lower_x, upper_x],
+                         [hess_lower_y, hess_upper_y],
+                         'k-')
+
+        ax_grad.plot(points, llh_values, 'o')
+        ax_hess.plot(points, gradient_values, 'o')
+        fig.savefig('05_llh_scan.png')
+        plt.close(fig)
+        return selected_bin
+
+    create_llh_slice(llh, x[idx_best])
 
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
     sol_mcmc = solution.LLHSolutionMCMC(n_used_steps=2000,
@@ -283,51 +315,6 @@ if __name__ == '__main__':
     ax.set_ylim([2e1, 2e3])
     fig.savefig('05_unfolding_mcmc_bayesian.png')
     plt.close(fig)
-
-
-
-
-
-
-    def create_llh_slice(llh, best_fit, selected_bin=None):
-        if selected_bin is None:
-            selected_bin = np.argmax(best_fit)
-        points = np.linspace(0.9 * best_fit[selected_bin],
-                             1.1 * best_fit[selected_bin],
-                             101)
-        llh_values = np.zeros_like(points)
-        gradient_values = np.zeros_like(points)
-        hessian_values = np.zeros_like(points)
-
-        fig, [ax_grad, ax_hess] = plt.subplots(2, 1, figsize=(24, 18))
-        diff = np.diff(points)[0] / 2.
-        for i, p_i in enumerate(points):
-            best_fit[selected_bin] = p_i
-            llh_values[i] = llh.evaluate_llh(best_fit)
-            gradient_values[i] = llh.evaluate_gradient(best_fit)[selected_bin]
-            hessian_values[i] = llh.evaluate_hessian(best_fit)[selected_bin,
-                                                               selected_bin]
-            lower_x = p_i - diff
-            upper_x = p_i + diff
-
-            grad_lower_y = llh_values[i] - (diff * gradient_values[i])
-            grad_upper_y = llh_values[i] + (diff * gradient_values[i])
-
-            hess_lower_y = gradient_values[i] - (diff * hessian_values[i])
-            hess_upper_y = gradient_values[i] + (diff * hessian_values[i])
-
-            ax_grad.plot([lower_x, upper_x],
-                         [grad_lower_y, grad_upper_y],
-                         'k-')
-
-            ax_hess.plot([lower_x, upper_x],
-                         [hess_lower_y, hess_upper_y],
-                         'k-')
-
-        ax_grad.plot(points, llh_values, 'o')
-        ax_hess.plot(points, gradient_values, 'o')
-        fig.savefig('05_llh_scan.png')
-        plt.close(fig)
 
 
     create_llh_slice(llh, vec_f_est_mcmc)
