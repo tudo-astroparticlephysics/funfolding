@@ -142,17 +142,17 @@ class LLHSolutionMinimizer(Solution):
         return solution, V_f_est
 
 
-class GradientDescentSolution(LLHSolutionMinimizer):
-    name = 'GradientDescentSolution'
+class LLHSolutionGradientDescent(LLHSolutionMinimizer):
+    name = 'LLHSolutionGradientDescent'
     status_need_for_fit = 1
 
     def __init__(self, n_steps=50):
-        super(GradientDescentSolution, self).__init__()
+        super(LLHSolutionGradientDescent, self).__init__()
         warnings.warn('Not fully tested!')
         self.n_steps = n_steps
 
     def fit(self, constrain_N=True):
-        super(GradientDescentSolution, self).fit()
+        super(LLHSolutionGradientDescent, self).fit()
 
         x = np.zeros((self.n_steps, len(self.x0)))
         llh = np.zeros(self.n_steps)
