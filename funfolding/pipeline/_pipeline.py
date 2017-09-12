@@ -86,7 +86,7 @@ def split_test_unfolding(n_iterations,
         n_events_A = -1
     elif isinstance(n_events_A, int) or isinstance(n_events_A, float):
         if n_events_A > 0 and n_events_A < 1:
-            n_events_A = n_events_total * n_events_A
+            n_events_A = int(n_events_total * n_events_A)
         elif n_events_A <= 0:
             n_events_A = -1
         else:
@@ -99,7 +99,7 @@ def split_test_unfolding(n_iterations,
     elif isinstance(n_events_binning, int) or \
             isinstance(n_events_binning, float):
         if n_events_binning > 0 and n_events_binning < 1:
-            n_events_binning = n_events_total * n_events_binning
+            n_events_binning = int(n_events_total * n_events_binning)
         else:
             n_events_binning = int(n_events_binning)
     elif isinstance(n_events_binning, str):
