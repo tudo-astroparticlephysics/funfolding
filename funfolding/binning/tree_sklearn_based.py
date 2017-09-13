@@ -13,7 +13,7 @@ import warnings
 old_sklean = StrictVersion("0.19.0") >= StrictVersion(sklearn.__version__)
 
 
-def __sample_uniform__(y, sample_weight=None):
+def __sample_uniform__(y, sample_weight=None, random_state=None):
     """Function used to sample a uniform distribution from a binned y.
 
     Parameters
@@ -24,18 +24,27 @@ def __sample_uniform__(y, sample_weight=None):
     y : numpy.floatarray, shape=(n_samples)
         Event weights.
 
+    random_state : None, int or numpy.random.RandomState, optional
+        If int, random_state is the seed used by the random number generator;
+        If RandomState instance, random_state is the random number generator;
+        If None, the random number generator is the RandomState instance used
+        by np.random.
+
+
     Returns
     -------
     mask: list of bools
         A boolean mask for y. True for samples that should be kept.
     """
+    if not isinstance(random_state, np.random.RandomState):
+        random_state = np.random.RandomState(random_state)
 
     freq = np.bincount(y, weights=sample_weight)
     mask = freq > 0
     if sample_weight is None:
         freq = freq.astype(float)
     freq /= np.min(freq[mask])
-    rnd = np.random.uniform(size=len(y)) * freq[y]
+    rnd = random_state.uniform(size=len(y)) * freq[y]
     return rnd <= 1.
 
 

@@ -153,7 +153,6 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
 
     def __init__(self, n_steps=500, gamma=0.01):
         super(LLHSolutionGradientDescent, self).__init__()
-        warnings.warn('Not fully tested!')
         self.n_steps = n_steps
         if gamma <= 0.:
             raise ValueError('\'gamma\' has to be > 0!')
@@ -193,8 +192,8 @@ class LLHSolutionMCMC(Solution):
                  n_threads=1,
                  random_state=None):
         super(LLHSolutionMCMC, self).__init__()
-        if not isinstance(random_state, np.random.mtrand.RandomState):
-            random_state = np.random.mtrand.RandomState(random_state)
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
         self.random_state = random_state
 
         self.n_walker = n_walker

@@ -15,6 +15,7 @@ from funfolding.visualization.visualize_classic_binning import mark_bin
 import corner
 from scipy import linalg
 
+
 def read_in(filename='Gamma_clas_sep.hdf5'):
     df = pd.read_hdf(filename)
     df_cutted = df[df.confidence_true_ >= 0.9]
@@ -134,6 +135,26 @@ if __name__ == '__main__':
     X_tree = df_A.get(tree_obs).values
     X_tree_test = df_test.get(tree_obs).values
 
+    tree_binning_uniform = binning.TreeBinningSklearn(
+        regression=False,
+        max_features=None,
+        min_samples_split=2,
+        max_depth=None,
+        min_samples_leaf=100,
+        max_leaf_nodes=100,
+        random_state=1337)
+
+    tree_binning_uniform.fit(X_tree,
+                     binned_E,
+                     uniform=True)
+
+
+    binned_g = tree_binning_uniform.digitize(X_tree)
+
+    tree_model_uniform = model.LinearModel()
+    tree_model_uniform.initialize(digitized_obs=binned_g,
+                          digitized_truth=binned_E)
+
     tree_binning = binning.TreeBinningSklearn(
         regression=False,
         max_features=None,
@@ -145,10 +166,11 @@ if __name__ == '__main__':
 
     tree_binning.fit(X_tree,
                      binned_E,
-                     uniform=True)
+                     uniform=False)
 
 
     binned_g = tree_binning.digitize(X_tree)
+    print(binned_g[:10])
 
     tree_model = model.LinearModel()
     tree_model.initialize(digitized_obs=binned_g,
@@ -194,6 +216,13 @@ if __name__ == '__main__':
             histtype='step',
             label='Tree Based ({} Bins)'.format(tree_binning.n_bins))
 
+    svd_values = tree_model_uniform.evaluate_condition()
+    ax.hist(bin_centers,
+            bins=bin_edges,
+            weights=svd_values,
+            histtype='step',
+            label='Tree Based ({} Bins; Uniform)'.format(tree_binning.n_bins))
+
     plt.legend(loc='lower left')
     ax.set_yscale("log", nonposy='clip')
     plt.savefig('05_condition.png')
@@ -201,6 +230,7 @@ if __name__ == '__main__':
     binned_g_test = tree_binning.digitize(X_tree_test)
     vec_g, vec_f = tree_model.generate_vectors(binned_g_test,
                                                binned_E_test)
+    print(vec_f)
 
     llh = solution.StandardLLH(tau=None,
                                C='thikonov')
@@ -268,17 +298,25 @@ if __name__ == '__main__':
     create_llh_slice(llh, x[idx_best])
 
     print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
-    sol_mcmc = solution.LLHSolutionMCMC(n_used_steps=2000,
+    sol_mcmc = solution.LLHSolutionMCMC(n_burn_steps=100,
+                                        n_used_steps=1000,
+                                        n_walker=100,
                                         random_state=1337)
     sol_mcmc.initialize(llh=llh, model=tree_model)
-    sol_mcmc.set_x0_and_bounds()
+    sol_mcmc.set_x0_and_bounds(x0=x[idx_best])
     vec_f_est_mcmc, sigma_vec_f, sample, probs = sol_mcmc.fit()
+    sol_mcmc.n_threads = 9
+    print('Calculating Eff sample size')
+    n_eff = sol_mcmc.calc_effective_sample_size(sample, n_threads=9)
+    print(n_eff)
     std = np.std(sample, axis=0)
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
+
+    exit()
 
     corner_fig = corner.corner(sample,
                                #truths=vec_f_est_mcmc,
