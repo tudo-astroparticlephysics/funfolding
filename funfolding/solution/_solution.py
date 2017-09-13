@@ -5,6 +5,11 @@ from scipy import linalg
 from scipy.optimize import minimize
 
 import emcee
+try:
+    from pymc.diagnostics import effective_n
+    no_pymc = False
+except ImportError:
+    no_pymc = True
 
 from ..model import LinearModel
 from .error_calculation import calc_feldman_cousins_errors_binned
@@ -220,7 +225,9 @@ class LLHSolutionMCMC(Solution):
         for i, x0_i in enumerate(self.x0):
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
         sampler = self.__initiallize_mcmc__()
-        vec_f, samples, probs = self.__run_mcmc__(sampler, pos_x0, n_steps)
+        vec_f, samples, probs = self.__run_mcmc__(sampler,
+                                                  pos_x0,
+                                                  n_steps)
         sigma_vec_f = calc_feldman_cousins_errors_binned(vec_f, samples)
         return vec_f, sigma_vec_f, samples, probs
 
@@ -238,8 +245,84 @@ class LLHSolutionMCMC(Solution):
         samples = samples.reshape((-1, self.model.dim_f))
 
         probs = sampler.lnprobability[:, self.n_burn_steps:]
+
         probs = probs.reshape((-1))
         idx_max = np.argmax(probs)
         if hasattr(self.model, 'transform_vec_fit'):
             samples = self.model.transform_vec_fit(samples)
         return samples[idx_max, :], samples, probs
+
+    def calc_effective_sample_size(self, sample, n_threads=None):
+        '''Function to calculate the effective sample_size.
+
+        Calculation uses effective_n from the pymc.diagonstics module.
+        It is based on the
+        Internally the sample is reshaped to
+        (n_walkers, n_samples_per_walker, dims_f). Changing the
+        n_walker attribute of the instance will break the calculation.
+
+        Parameters
+        ----------
+        x : array-like, shape=(n_walkers*n_used_steps, dim_f)
+            An array containing the reshape samples for all walkers.
+            Internally it will be reshaped to m x n x k, where m is
+            the number of walkers, n the number of samples, and k the dimension
+            of the stochastic.
+
+        n_threads : int or None
+            Number of threads used to calculate the effective sample size.
+            If None the n_threads from the LLHSolutionMCMC instance is used.
+
+        Returns
+        -------
+        n_eff : array-like, shape=(dim_f,)
+            Return the effective sample size, :math:`\hat{n}_{eff}`
+
+        Notes
+        -----
+        The diagnostic is computed by:
+          .. math:: \hat{n}_{eff} = \frac{mn}}{1 + 2 \sum_{t=1}^T \hat{\rho}_t}
+        where :math:`\hat{\rho}_t` is the estimated autocorrelation at lag t,
+        and T is the first odd positive integer for which the sum
+        :math:`\hat{\rho}_{T+1} + \hat{\rho}_{T+1}`
+        is negative.
+
+        References
+        ----------
+        Gelman et al. (2014)
+        '''
+        if no_pymc:
+            raise ImportError('To call \'calc_effective_sample_size\' '
+                              '\'pymc\' has to be installed!')
+        if n_threads is None:
+            n_threads = self.n_threads
+        elif not isinstance(n_threads, int):
+            raise ValueError('\'n_threads\' has to be int or None!')
+        dim_f = sample.shape[1]
+        sample = sample.reshape((self.n_walker,
+                                 self.n_used_steps,
+                                 dim_f))
+
+        n_eff = [0] * dim_f
+        n_threads = min(dim_f, n_threads)
+
+        if n_threads > 1:
+            from concurrent.futures import ProcessPoolExecutor, wait
+            with ProcessPoolExecutor(max_workers=n_threads) as executor:
+                futures = []
+                for i in range(dim_f):
+                    futures.append(executor.submit(
+                        __effective_n_idx__,
+                        x=sample[:, :, i],
+                        idx=i))
+                results = wait(futures)
+            for i, future_i in enumerate(results.done):
+                run_result = future_i.result()
+                n_eff[run_result[0]] = run_result[1]
+            return n_eff
+        else:
+            return effective_n(sample)
+
+
+def __effective_n_idx__(idx, x):
+    return idx, effective_n(x)
