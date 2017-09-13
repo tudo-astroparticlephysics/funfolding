@@ -208,7 +208,7 @@ if __name__ == '__main__':
                     model=tree_model)
 
 
-    sol_gd = solution.LLHSolutionGradientDescent(n_steps=1000,
+    sol_gd = solution.LLHSolutionGradientDescent(n_steps=500,
                                                  gamma=0.01)
     sol_gd.initialize(llh=llh, model=tree_model)
     sol_gd.set_x0_and_bounds()
@@ -249,6 +249,8 @@ if __name__ == '__main__':
             hess_lower_y = gradient_values[i] - (diff * hessian_values[i])
             hess_upper_y = gradient_values[i] + (diff * hessian_values[i])
 
+            ax.arrow(0, 0, 0.5, 0.5, head_width=0.05, head_length=0.1, fc='k', ec='k')
+
             ax_grad.plot([lower_x, upper_x],
                          [grad_lower_y, grad_upper_y],
                          'k-')
@@ -278,8 +280,62 @@ if __name__ == '__main__':
         str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
     print('{}\t{}'.format(str_0, str_1))
 
-    # corner.corner(sample, truths=vec_f_est_mcmc, truth_color='r')
-    # plt.savefig('05_corner_fact.png')
+    corner_fig = corner.corner(sample,
+                               #truths=vec_f_est_mcmc,
+                               #truth_color='r',
+                               rasterized=True)
+    corner_fig.savefig('05_corner_fact.png')
+
+
+    def add_path_to_corner_plot(corner_fig, points, step_size=1):
+        used_points = points[::step_size]
+        axes = corner_fig.axes
+
+        for n in range(len(used_points)):
+            lines = []
+            pointer = -1
+            points = used_points[:n+1]
+            for i_y in range(points.shape[1]):
+                for i_x in range(points.shape[1]):
+                    pointer += 1
+                    ax = axes[pointer]
+                    if i_x > i_y:
+                        continue
+                    elif i_x == i_y:
+                        x_lims = ax.get_xlim()
+                        p_x = points[:, i_x]
+                        x_in_range = np.logical_and(x_lims[0] < p_x,
+                                                    x_lims[1] > p_x)
+                        if sum(x_in_range) > 0:
+                            p_x = points[x_in_range, i_x]
+                            lines.append(ax.axvline(p_x[-1], color='b'))
+                    else:
+                        x_lims = ax.get_xlim()
+                        y_lims = ax.get_ylim()
+                        p_x = points[:, i_x]
+                        p_y = points[:, i_y]
+                        x_in_range = np.logical_and(x_lims[0] < p_x,
+                                                    x_lims[1] > p_x)
+                        y_in_range = np.logical_and(y_lims[0] < p_y,
+                                                    y_lims[1] > p_y)
+                        in_range = np.logical_and(x_in_range, y_in_range)
+                        if sum(in_range) > 0:
+                            p_x = points[in_range, i_x]
+                            p_y = points[in_range, i_y]
+                            lines.append(ax.plot(p_x, p_y, 'o-', color='b'))
+            if len(lines) > 0:
+                corner_fig.savefig(
+                    'gif_jpgs/05_corner_numbers_{}.jpg'.format(n),
+                    figsize=(8, 8),
+                    dpi=50)
+            for l in lines:
+                try:
+                    l.pop(0).remove()
+                except AttributeError:
+                    l.remove()
+
+
+    add_path_to_corner_plot(corner_fig, x, step_size=10)
 
     fig, ax = plt.subplots(1, 1, figsize=(6, 4))
     bin_mids = (binning_E[1:] + binning_E[:-1]) / 2.
@@ -317,7 +373,6 @@ if __name__ == '__main__':
     plt.close(fig)
 
 
-    create_llh_slice(llh, vec_f_est_mcmc)
 
     import cPickle
 

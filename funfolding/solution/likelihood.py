@@ -174,6 +174,7 @@ class StandardLLH(LLH):
     def evaluate_neg_hessian(self, f):
         return self.evaluate_hessian(f) * -1.
 
+
 class LLHThikonovForLoops:
     def __init__(self, g, linear_model, tau):
         if not isinstance(linear_model, LinearModel):

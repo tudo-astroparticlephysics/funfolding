@@ -244,7 +244,6 @@ class ClassicBinning(Binning):
 
     def __merge_bins__(self, i_label_keep, i_label_remove):
         if i_label_remove <= i_label_keep:
-            print(i_label_remove, i_label_keep)
             raise RuntimeError
         t_labels_remove = self.i_to_t[i_label_remove]
         if isinstance(t_labels_remove, tuple):

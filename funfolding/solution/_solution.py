@@ -112,7 +112,6 @@ class LLHSolutionMinimizer(Solution):
         if x0 is None:
             x0 = self.model.generate_fit_x0(self.vec_g)
         if bounds is None:
-            print('bounds generated')
             bounds = self.model.generate_fit_bounds(self.vec_g)
         elif isinstance(bounds, bool):
             if bounds:
@@ -158,9 +157,6 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
     def fit(self):
         super(LLHSolutionMinimizer, self).fit()
 
-        bounds = np.array(self.bounds)
-        print(bounds)
-
         x = np.zeros((self.n_steps, len(self.x0)))
         llh = np.zeros(self.n_steps)
         gradient = np.zeros((self.n_steps, len(self.x0)))
@@ -170,7 +166,6 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
         llh[0] = self.llh.evaluate_llh(self.x0)
         gradient[0, :] = self.llh.evaluate_gradient(self.x0)
         hessian[0, :, :] = self.llh.evaluate_hessian(self.x0)
-
 
         for i in range(1, self.n_steps):
             H_inv = linalg.inv(hessian[i-1])
