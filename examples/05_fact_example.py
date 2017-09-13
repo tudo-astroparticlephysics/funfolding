@@ -45,6 +45,9 @@ if __name__ == '__main__':
     logging.basicConfig(
         format='%(processName)-10s %(name)s %(levelname)-8s %(message)s',
         level=logging.INFO)
+
+    random_state = np.random.RandomState(1337)
+
     df = read_in()
     df_A = df.iloc[5000:]
     df_test = df.iloc[:5000]
@@ -58,7 +61,8 @@ if __name__ == '__main__':
     binned_E_test = np.digitize(df_test.MCorsikaEvtHeader_fTotalEnergy,
                            binning_E)
     classic_binning = binning.ClassicBinning(
-        bins = [15, 25])
+        bins=[15, 25],
+        random_state=random_state)
     classic_binning.fit(X)
 
     fig, ax = plt.subplots()
@@ -135,6 +139,8 @@ if __name__ == '__main__':
     X_tree = df_A.get(tree_obs).values
     X_tree_test = df_test.get(tree_obs).values
 
+
+
     tree_binning_uniform = binning.TreeBinningSklearn(
         regression=False,
         max_features=None,
@@ -142,7 +148,7 @@ if __name__ == '__main__':
         max_depth=None,
         min_samples_leaf=100,
         max_leaf_nodes=100,
-        random_state=1337)
+        random_state=random_state)
 
     tree_binning_uniform.fit(X_tree,
                      binned_E,
@@ -162,15 +168,13 @@ if __name__ == '__main__':
         max_depth=None,
         min_samples_leaf=100,
         max_leaf_nodes=100,
-        random_state=1337)
+        random_state=random_state)
 
     tree_binning.fit(X_tree,
                      binned_E,
                      uniform=False)
 
-
     binned_g = tree_binning.digitize(X_tree)
-    print(binned_g[:10])
 
     tree_model = model.LinearModel()
     tree_model.initialize(digitized_obs=binned_g,
@@ -230,7 +234,6 @@ if __name__ == '__main__':
     binned_g_test = tree_binning.digitize(X_tree_test)
     vec_g, vec_f = tree_model.generate_vectors(binned_g_test,
                                                binned_E_test)
-    print(vec_f)
 
     llh = solution.StandardLLH(tau=None,
                                C='thikonov')
@@ -301,7 +304,7 @@ if __name__ == '__main__':
     sol_mcmc = solution.LLHSolutionMCMC(n_burn_steps=100,
                                         n_used_steps=1000,
                                         n_walker=100,
-                                        random_state=1337)
+                                        random_state=random_state)
     sol_mcmc.initialize(llh=llh, model=tree_model)
     sol_mcmc.set_x0_and_bounds(x0=x[idx_best])
     vec_f_est_mcmc, sigma_vec_f, sample, probs = sol_mcmc.fit()
