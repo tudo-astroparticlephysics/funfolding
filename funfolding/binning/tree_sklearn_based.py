@@ -401,7 +401,9 @@ class TreeBinningSklearn(Binning):
             warnings.warn(
                 'Uniform smapling is only supported for classifcation')
         elif uniform:
-            mask = __sample_uniform__(y, sample_weight=sample_weight)
+            mask = __sample_uniform__(y,
+                                      sample_weight=sample_weight,
+                                      random_state=self.random_state)
             y = y[mask]
             X = X[mask]
         if self.boosted is not None:
