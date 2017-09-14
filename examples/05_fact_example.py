@@ -191,7 +191,6 @@ if __name__ == '__main__':
             label='2 Observables (Unmerged; {} Bins)'.format(
                 classic_binning.n_bins))
 
-
     svd_values = merged_model.evaluate_condition()
     ax.hist(bin_centers,
             bins=bin_edges,

@@ -25,6 +25,7 @@ def calc_feldman_cousins_errors_binned(best_fit,
     for i, best_fit_i in enumerate(best_fit):
         sample_i = sample[:, i]
         percentile_i = np.percentile(sample_i, percentiles)
+
         range_percent = percentile_i[1] - percentile_i[0]
         eps_i = range_percent * eps
         min_s = np.min(sample_i)
@@ -33,8 +34,16 @@ def calc_feldman_cousins_errors_binned(best_fit,
         binning = np.arange(min_s - 0.5 * eps_i,
                             max_s + 1.5 * eps_i,
                             eps_i)
-        hist = np.histogram(sample_i,
-                            bins=binning)[0]
+        try:
+            hist = np.histogram(sample_i,
+                                bins=binning)[0]
+        except IndexError:
+            print(i)
+            print(percentile_i)
+            print(sample_i)
+            print(binning)
+            print(best_fit)
+            exit()
         hist = hist / float(sample.shape[0])
         bin_centers = (binning[1:] + binning[:-1]) / 2.
         diff = np.absolute(bin_centers - best_fit[i])
