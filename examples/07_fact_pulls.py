@@ -10,8 +10,6 @@ from matplotlib import pyplot as plt
 
 from funfolding import binning, model, solution, pipeline
 
-from concurrent.futures import ProcessPoolExecutor, wait
-
 
 def do_single_pull(obs_array_binning,
                    obs_array_A,
@@ -32,7 +30,7 @@ def do_single_pull(obs_array_binning,
         max_features=None,
         min_samples_split=2,
         max_depth=None,
-        min_samples_leaf=min_samples_leaf*10,
+        min_samples_leaf=min_samples_leaf * 10,
         random_state=random_state)
     tree_binning.fit(obs_array_binning,
                      y_binning)
@@ -74,8 +72,8 @@ def do_single_pull(obs_array_binning,
     vec_f_str = ', '.join('{0:.2f}'.format(a)
                           for a in vec_f_est_mcmc)
     logging.info('\tBest Fit (MCMC):\t{}\t(LLH: {})'.format(
-            vec_f_str,
-            max(probs)))
+                 vec_f_str,
+                 max(probs)))
     return float(np.sum(probs < llh_truth)) / len(probs)
 
 
@@ -88,7 +86,7 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
 
     random_seed = 1340
-    n_pulls = 5000
+    n_pulls = 20
     n_walker = 100
     n_steps_used = 2000
     n_samples_test = 5000
@@ -96,7 +94,6 @@ if __name__ == '__main__':
     binning_E = np.linspace(2.4, 4.2, 10)
 
     n_jobs = int(options.n_jobs)
-
 
     df = pd.read_hdf('fact_simulations.hdf', 'gamma_simulation')
 
@@ -135,14 +132,12 @@ if __name__ == '__main__':
         n_events_binning=n_samples_test * 10.,
         random_state=random_state)
 
-    p_values = np.zeros(n_pulls)
-
     vec_f_truth = np.array(np.bincount(binned_E), dtype=float)[1:]
     vec_f_truth /= np.sum(vec_f_truth)
     vec_f_truth *= n_samples_test
 
     vec_f_truth_str = ', '.join('{0:.2f}'.format(a)
-                               for a in vec_f_truth)
+                                for a in vec_f_truth)
     if n_jobs == 1:
         logging.captureWarnings(True)
         logging.basicConfig(
@@ -154,11 +149,29 @@ if __name__ == '__main__':
         print('Doing {} Pulls in max. {} parallel Jobs!'.format(n_pulls,
                                                                 n_jobs))
     if n_jobs > 1:
+        import time
+        from concurrent.futures import ProcessPoolExecutor
+
         with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-            futures = []
+            p_values = []
+
+            def future_callback(future):
+                future_callback.finished += 1
+                print('{}/{} Pulls finished!'.format(
+                    future_callback.finished, n_pulls))
+                if not future.cancelled():
+                    p_value = future.result()
+                    p_values.append(p_value)
+                else:
+                    p_values.append(None)
+                future_callback.running -= 1
+
+            future_callback.running = 0
+            future_callback.finished = 0
+
             for i, (idx_test, idx_A, idx_binning) in enumerate(
                     pull_mode_iterator):
-                futures.append(executor.submit(
+                future = executor.submit(
                     do_single_pull,
                     obs_array_binning=obs_array[idx_binning],
                     obs_array_A=obs_array[idx_A],
@@ -166,12 +179,16 @@ if __name__ == '__main__':
                     y_binning=binned_E[idx_binning],
                     y_A=binned_E[idx_A],
                     y_test=binned_E[idx_test],
-                    random_state=random_seed + i))
-            results = wait(futures)
-            for i, future_i in enumerate(results.done):
-                run_result = future_i.result()
-                p_values[i] = run_result
+                    random_state=random_seed + i)
+                future.add_done_callback(future_callback)
+                future_callback.running += 1
+                while True:
+                    if future_callback.finished < n_jobs:
+                        break
+                    else:
+                        time.sleep(1)
     else:
+        p_values = np.zeros(n_pulls)
         for i, (idx_test, idx_A, idx_binning) in enumerate(pull_mode_iterator):
             logging.info('{}/{} started'.format(i + 1, n_pulls))
             p_values[i] = do_single_pull(
