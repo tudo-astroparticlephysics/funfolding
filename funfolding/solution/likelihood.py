@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 
 from ..model import LinearModel, Model
@@ -83,6 +85,16 @@ class StandardLLH(LLH):
         self.vec_g = vec_g
         self.N = np.sum(vec_g)
 
+        if self.vec_acceptance is not None:
+            if len(self.vec_acceptance) != model.dim_f:
+                raise ValueError("'vec_acceptance' has to be of the same "
+                                 "length as vec_f!")
+            self.vec_acceptance = self.vec_acceptance
+        else:
+            self.vec_acceptance = np.ones(model.dim_f)
+
+        self._A_c = np.diag(self.vec_acceptance)
+
         if self.tau is None:
             self._tau = None
         else:
@@ -106,15 +118,9 @@ class StandardLLH(LLH):
                 if m_C is None:
                     raise ValueError("{} invalid option for 'C'".format(
                         self.C))
-                self._C = np.dot(np.dot(m_C, np.diag(self._tau)), m_C)
-
-        if self.vec_acceptance is not None:
-            if len(self.vec_acceptance) != model.dim_f:
-                raise ValueError("'vec_acceptance' has to be of the same "
-                                 "length as vec_f!")
-            self.vec_acceptance = self.vec_acceptance
-        else:
-            self.vec_acceptance = 1.
+                m_C_l = np.dot(self._A_c, m_C)
+                m_C_r = np.dot(m_C, self._A_c)
+                self._C = np.dot(np.dot(m_C_l, np.diag(self._tau)), m_C_r)
 
         if isinstance(model, LinearModel):
             self.gradient_defined = True
@@ -130,7 +136,7 @@ class StandardLLH(LLH):
             f_reg_used = f_reg * self.vec_acceptance
             if self.log_f_reg:
                 f_reg_used = np.log10(f_reg_used + 1)
-            regularization_part = -0.5 * np.dot(
+            regularization_part = 0.5 * np.dot(
                 np.dot(f_reg_used.T, self._C), f_reg_used)
         else:
             regularization_part = 0
@@ -148,6 +154,8 @@ class StandardLLH(LLH):
         if self._tau is not None:
             f_reg_used = f_reg * self.vec_acceptance
             if self.log_f_reg:
+                raise NotImplementedError(
+                    'log_f_reg not supported for gradients')
                 f_reg_used = np.log10(f_reg_used + 1)
             regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
                 self.C, f_reg_used)
@@ -165,6 +173,9 @@ class StandardLLH(LLH):
                                  np.diag(self.vec_g / g_est**2)),
                           self.model.A)
         if self._tau is not None:
+            if self.log_f_reg:
+                raise NotImplementedError(
+                    'log_f_reg not supported for hessian')
             regularization_part = self.tau * self.C
         else:
             regularization_part = 0.
