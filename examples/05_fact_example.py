@@ -16,30 +16,6 @@ import corner
 from scipy import linalg
 
 
-def read_in(filename='Gamma_clas_sep.hdf5'):
-    df = pd.read_hdf(filename)
-    df_cutted = df[df.confidence_true_ >= 0.9]
-
-    df_cutted.MCorsikaEvtHeader_fTotalEnergy = np.log10(
-        df_cutted.MCorsikaEvtHeader_fTotalEnergy)
-    df_cutted.E_RF = np.log10(df_cutted.E_RF)
-    df_cutted.ConcCore = np.log10(df_cutted.ConcCore)
-    df_cutted.Size = np.log10(df_cutted.Size)
-    df_cutted.Length = np.log10(df_cutted.Length)
-    df_cutted.numPixelInShower = np.log10(
-    df_cutted.numPixelInShower)
-
-    df_cutted = df_cutted[df_cutted.MCorsikaEvtHeader_fTotalEnergy <= 4.2]
-    df_cutted = df_cutted[df_cutted.MCorsikaEvtHeader_fTotalEnergy >= 2.4]
-
-    df_cutted = df_cutted[df_cutted.ZdTracking <= 31.0]
-    df_cutted = df_cutted[df_cutted.ZdTracking >= 5]
-
-    return df_cutted
-
-
-
-
 if __name__ == '__main__':
     logging.captureWarnings(True)
     logging.basicConfig(
@@ -48,7 +24,7 @@ if __name__ == '__main__':
 
     random_state = np.random.RandomState(1337)
 
-    df = read_in()
+    df = pd.read_hdf('fact_simulations.hdf', 'gamma_simulation')
     df_A = df.iloc[5000:]
     df_test = df.iloc[:5000]
 
@@ -56,9 +32,9 @@ if __name__ == '__main__':
     X_test = df_test.get(['ConcCore', 'E_RF']).values
 
     binning_E = np.linspace(2.4, 4.2, 10)
-    binned_E = np.digitize(df_A.MCorsikaEvtHeader_fTotalEnergy,
+    binned_E = np.digitize(df.loc[:, 'log10(energy)'],
                            binning_E)
-    binned_E_test = np.digitize(df_test.MCorsikaEvtHeader_fTotalEnergy,
+    binned_E_test = np.digitize(df.loc[:, 'log10(energy)'],
                            binning_E)
     classic_binning = binning.ClassicBinning(
         bins=[15, 25],
@@ -117,12 +93,14 @@ if __name__ == '__main__':
     vec_g, vec_f = merged_model.generate_vectors(binned_g, binned_E)
 
 
-    tree_obs = ["Size",
+    tree_obs = ["log10(E_RF)",
+                "log10(Size)",
+                "log10(ConcCore)",
+                "log10(numPixelInShower)",
+                "log10(Length)",
                 "Width",
-                "Length",
                 "M3Trans",
                 "M3Long",
-                "ConcCore",
                 "m3l",
                 "m3t",
                 "Concentration_onePixel",
@@ -131,7 +109,6 @@ if __name__ == '__main__':
                 "Leakage2",
                 "concCOG",
                 "numIslands",
-                "numPixelInShower",
                 "phChargeShower_mean",
                 "phChargeShower_variance",
                 "phChargeShower_max"]
