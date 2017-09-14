@@ -209,11 +209,12 @@ class LLHSolutionMCMC(Solution):
         self.vec_g = llh.vec_g
         self.model = model
 
-    def set_x0_and_bounds(self, x0=None, bounds=False):
+    def set_x0_and_bounds(self, x0=None, bounds=False, min_x0=0.5):
         super(LLHSolutionMCMC, self).set_x0_and_bounds()
         if x0 is None:
             x0 = self.model.generate_fit_x0(self.vec_g)
         self.x0 = x0
+        self.min_x0 = min_x0
         if bounds is not None and bounds:
             warnings.warn("'bounds' have no effect or MCMC!")
 
@@ -222,7 +223,10 @@ class LLHSolutionMCMC(Solution):
         n_steps = self.n_used_steps + self.n_burn_steps
         pos_x0 = np.zeros((self.n_walker, self.model.dim_f), dtype=float)
         for i, x0_i in enumerate(self.x0):
+            if x0_i < 1.:
+                x0_i += self.min_x0
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
+        pos_x0[pos_x0==0] = self.min_x0
         sampler = self.__initiallize_mcmc__()
         vec_f, samples, probs = self.__run_mcmc__(sampler,
                                                   pos_x0,
