@@ -226,7 +226,7 @@ class LLHSolutionMCMC(Solution):
             if x0_i < 1.:
                 x0_i += self.min_x0
             pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
-        pos_x0[pos_x0==0] = self.min_x0
+        pos_x0[pos_x0 == 0] = self.min_x0
         sampler = self.__initiallize_mcmc__()
         vec_f, samples, probs = self.__run_mcmc__(sampler,
                                                   pos_x0,
