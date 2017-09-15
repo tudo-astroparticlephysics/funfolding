@@ -86,7 +86,7 @@ if __name__ == '__main__':
     (options, args) = parser.parse_args()
 
     random_seed = 1340
-    n_pulls = 20
+    n_pulls = 5000
     n_walker = 100
     n_steps_used = 2000
     n_samples_test = 5000
@@ -183,10 +183,12 @@ if __name__ == '__main__':
                 future.add_done_callback(future_callback)
                 future_callback.running += 1
                 while True:
-                    if future_callback.finished < n_jobs:
+                    if future_callback.running < n_jobs:
                         break
                     else:
                         time.sleep(1)
+            while future_callback.finished < n_pulls:
+                time.sleep(1)
     else:
         p_values = np.zeros(n_pulls)
         for i, (idx_test, idx_A, idx_binning) in enumerate(pull_mode_iterator):

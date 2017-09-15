@@ -98,13 +98,27 @@ def recursive_feature_selection_condition_validation(X_train,
                 feature_set = features.difference(order.union(feature_set))
             job_params.append((i, feature_set))
         if n_jobs > 1:
-            from concurrent.futures import ThreadPoolExecutor, wait
-            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-                futures = []
+            from concurrent.futures import ProcessPoolExecutor
+            import time
+
+            with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+
+                def future_callback(future):
+                    future_callback.finished += 1
+                    if not future.cancelled():
+                        i, condition_value = future.result()
+                        condition[i] = condition_value
+                    else:
+                        raise RuntimeError('Subprocess crashed!')
+                    future_callback.running -= 1
+
+                future_callback.running = 0
+                future_callback.finished = 0
+
                 for i, feature_set in job_params:
                     if X_merge is not None:
                         X_merge = X_merge[:, feature_set]
-                    futures.append(executor.submit(
+                    future = executor.submit(
                         idx=i,
                         X_train=X_train[:, feature_set],
                         y_train=y_train,
@@ -112,11 +126,16 @@ def recursive_feature_selection_condition_validation(X_train,
                         y_validation=y_validation,
                         binning=binning,
                         X_merge=X_merge,
-                        merge_kw=merge_kw))
-                results = wait(futures)
-            for future_i in results.done:
-                run_result = future_i.result()
-                condition[run_result[0]] = run_result[1]
+                        merge_kw=merge_kw)
+                    future.add_done_callback(future_callback)
+                    future_callback.running += 1
+                    while True:
+                        if future_callback.running < n_jobs:
+                            break
+                        else:
+                            time.sleep(1)
+                while future_callback.finished < len(job_params) - 1:
+                    time.sleep(1)
         else:
             for i, feature_set in job_params:
                 if X_merge is not None:
