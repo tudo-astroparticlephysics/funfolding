@@ -116,6 +116,11 @@ def recursive_feature_selection_condition_validation(X_train,
                 future_callback.finished = 0
 
                 for i, feature_set in job_params:
+                    while True:
+                        if future_callback.running < n_jobs:
+                            break
+                        else:
+                            time.sleep(1)
                     if X_merge is not None:
                         X_merge = X_merge[:, feature_set]
                     future = executor.submit(
@@ -129,13 +134,6 @@ def recursive_feature_selection_condition_validation(X_train,
                         merge_kw=merge_kw)
                     future.add_done_callback(future_callback)
                     future_callback.running += 1
-                    while True:
-                        if future_callback.running < n_jobs:
-                            break
-                        else:
-                            time.sleep(1)
-                while future_callback.finished < len(job_params) - 1:
-                    time.sleep(1)
         else:
             for i, feature_set in job_params:
                 if X_merge is not None:

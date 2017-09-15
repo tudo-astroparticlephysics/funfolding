@@ -310,18 +310,32 @@ class LLHSolutionMCMC(Solution):
         n_threads = min(dim_f, n_threads)
 
         if n_threads > 1:
-            from concurrent.futures import ProcessPoolExecutor, wait
+            from concurrent.futures import ProcessPoolExecutor
+            import time
             with ProcessPoolExecutor(max_workers=n_threads) as executor:
-                futures = []
+                def future_callback(future):
+                    future_callback.finished += 1
+                    if not future.cancelled():
+                        i, n_eff_i = future.result()
+                        n_eff[i] = n_eff_i
+                    else:
+                        raise RuntimeError('Subprocess crashed!')
+                    future_callback.running -= 1
+
+                future_callback.running = 0
+                future_callback.finished = 0
                 for i in range(dim_f):
-                    futures.append(executor.submit(
+                    while True:
+                        if future_callback.running < n_threads:
+                            break
+                        else:
+                            time.sleep(1)
+                    future = executor.submit(
                         __effective_n_idx__,
                         x=sample[:, :, i],
-                        idx=i))
-                results = wait(futures)
-            for i, future_i in enumerate(results.done):
-                run_result = future_i.result()
-                n_eff[run_result[0]] = run_result[1]
+                        idx=i)
+                    future_callback.running += 1
+                    future.add_done_callback(future_callback)
             return n_eff
         else:
             return effective_n(sample)

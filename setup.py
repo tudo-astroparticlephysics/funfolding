@@ -40,6 +40,7 @@ setup(
         'scikit-learn>=0.18.1',
         'emcee',
         'scipy',
+        'futures',
         'matplotlib',
         'corner'],
     setup_requires=['pytest-runner'],
