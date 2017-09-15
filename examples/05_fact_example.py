@@ -22,29 +22,54 @@ if __name__ == '__main__':
         format='%(processName)-10s %(name)s %(levelname)-8s %(message)s',
         level=logging.INFO)
 
-    random_state = np.random.RandomState(1337)
 
-    df = pd.read_hdf('fact_simulations.hdf', 'gamma_simulation')
-    df_A = df.iloc[5000:]
-    df_test = df.iloc[:5000]
-
-    X = df_A.get(['ConcCore', 'E_RF']).values
-    X_test = df_test.get(['ConcCore', 'E_RF']).values
-
+    random_seed = 1340
+    n_walker = 100
+    n_steps_used = 2000
+    n_samples_test = 5000
+    min_samples_leaf = 20
     binning_E = np.linspace(2.4, 4.2, 10)
+
+
+    random_state = np.random.RandomState(random_seed)
+    df = pd.read_hdf('fact_simulations.hdf', 'gamma_simulation')
+
     binned_E = np.digitize(df.loc[:, 'log10(energy)'],
                            binning_E)
-    binned_E_test = np.digitize(df.loc[:, 'log10(energy)'],
-                           binning_E)
+
+    idx = np.arange(len(df))
+    random_state.shuffle(idx)
+
+    test_slice = slice(0, n_samples_test)
+    binning_slice = slice(n_samples_test, n_samples_test + 10 * n_samples_test)
+    A_slice = slice(n_samples_test + 10 * n_samples_test, None)
+
+    idx_test = np.sort(idx[test_slice])
+    idx_binning = np.sort(idx[binning_slice])
+    idx_A = np.sort(idx[A_slice])
+
+    binning_E = np.linspace(2.4, 4.2, 10)
+    binned_E = np.digitize(df.loc[:, 'log10(energy)'], binning_E)
+    binned_E_test = binned_E[idx_test]
+    binned_E_binning = binned_E[idx_binning]
+    binned_E_A = binned_E[idx_A]
+
+
+    obs_array = df.get(['log10(ConcCore)', 'log10(E_RF)']).values
+
+    X_A = obs_array[idx_A]
+    X_test = obs_array[idx_test]
+
     classic_binning = binning.ClassicBinning(
         bins=[15, 25],
         random_state=random_state)
-    classic_binning.fit(X)
+
+    classic_binning.fit(X_A)
 
     fig, ax = plt.subplots()
     plot_binning(ax,
                  classic_binning,
-                 X,
+                 X_A,
                  log_c=False,
                  cmap='viridis')
     fig.savefig('05_fact_example_original_binning.png')
@@ -56,42 +81,36 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
     plot_binning(ax,
                  closest,
-                 X,
+                 X_A,
                  log_c=False,
                  cmap='viridis')
     fig.savefig('05_fact_example_original_binning_closest.png')
 
     unmerged_model = model.LinearModel()
-    binned_g = classic_binning.digitize(X)
-    unmerged_model.initialize(digitized_obs=binned_g,
-                              digitized_truth=binned_E)
+    binned_g_A = classic_binning.digitize(X_A)
+    unmerged_model.initialize(digitized_obs=binned_g_A,
+                              digitized_truth=binned_E_A)
 
-
+    binned_g_A = closest.digitize(X_A)
     merged_model = model.LinearModel()
-    binned_g = closest.digitize(X)
-    merged_model.initialize(digitized_obs=binned_g,
-                     digitized_truth=binned_E)
+    merged_model.initialize(digitized_obs=binned_g_A,
+                            digitized_truth=binned_E_A)
 
     single_obs_model = model.LinearModel()
-    max_e = np.max(X[:, 1]) + 1e-3
-    min_e = np.min(X[:, 1]) - 1e-3
+    max_e = np.max(X_A[:, 1]) + 1e-3
+    min_e = np.min(X_A[:, 1]) - 1e-3
     binning_E_obs = np.linspace(min_e, max_e, 11)
-    binned_g = np.digitize(X[:, 1], binning_E_obs)
-    single_obs_model.initialize(digitized_obs=binned_g,
-                                digitized_truth=binned_E)
+    binned_g_A = np.digitize(X_A[:, 1], binning_E_obs)
+    single_obs_model.initialize(digitized_obs=binned_g_A,
+                                digitized_truth=binned_E_A)
 
-
-    n_bins = len(closest.i_to_t)
     single_obs_model_more_bins = model.LinearModel()
-    max_e = np.max(X[:, 1]) + 1e-3
-    min_e = np.min(X[:, 1]) - 1e-3
-    binning_E_obs = np.linspace(min_e, max_e, n_bins + 1)
-    binned_g = np.digitize(X[:, 1], binning_E_obs)
-    single_obs_model_more_bins.initialize(digitized_obs=binned_g,
-                                          digitized_truth=binned_E)
-
-    vec_g, vec_f = merged_model.generate_vectors(binned_g, binned_E)
-
+    max_e = np.max(X_A[:, 1]) + 1e-3
+    min_e = np.min(X_A[:, 1]) - 1e-3
+    binning_E_obs = np.linspace(min_e, max_e, closest.n_bins + 1)
+    binned_g_A = np.digitize(X_A[:, 1], binning_E_obs)
+    single_obs_model_more_bins.initialize(digitized_obs=binned_g_A,
+                                          digitized_truth=binned_E_A)
 
     tree_obs = ["log10(E_RF)",
                 "log10(Size)",
@@ -113,49 +132,41 @@ if __name__ == '__main__':
                 "phChargeShower_variance",
                 "phChargeShower_max"]
 
-    X_tree = df_A.get(tree_obs).values
-    X_tree_test = df_test.get(tree_obs).values
+    obs_array = df.get(tree_obs).values
 
-
+    X_tree_test = obs_array[idx_test]
+    X_tree_binning = obs_array[idx_binning]
+    X_tree_A = obs_array[idx_A]
 
     tree_binning_uniform = binning.TreeBinningSklearn(
         regression=False,
-        max_features=None,
-        min_samples_split=2,
-        max_depth=None,
-        min_samples_leaf=100,
-        max_leaf_nodes=100,
+        min_samples_leaf=int(min_samples_leaf * 10.),
         random_state=random_state)
 
-    tree_binning_uniform.fit(X_tree,
-                     binned_E,
-                     uniform=True)
+    tree_binning_uniform.fit(X_tree_binning,
+                             binned_E_binning,
+                             uniform=True)
 
-
-    binned_g = tree_binning_uniform.digitize(X_tree)
+    binned_g_A = tree_binning_uniform.digitize(X_tree_A)
 
     tree_model_uniform = model.LinearModel()
-    tree_model_uniform.initialize(digitized_obs=binned_g,
-                          digitized_truth=binned_E)
+    tree_model_uniform.initialize(digitized_obs=binned_g_A,
+                                  digitized_truth=binned_E_A)
 
     tree_binning = binning.TreeBinningSklearn(
         regression=False,
-        max_features=None,
-        min_samples_split=2,
-        max_depth=None,
-        min_samples_leaf=100,
-        max_leaf_nodes=100,
+        min_samples_leaf=int(min_samples_leaf * 10.),
         random_state=random_state)
 
-    tree_binning.fit(X_tree,
-                     binned_E,
+    tree_binning.fit(X_tree_binning,
+                     binned_E_binning,
                      uniform=False)
 
-    binned_g = tree_binning.digitize(X_tree)
+    binned_g_A = tree_binning.digitize(X_tree_A)
 
     tree_model = model.LinearModel()
-    tree_model.initialize(digitized_obs=binned_g,
-                          digitized_truth=binned_E)
+    tree_model.initialize(digitized_obs=binned_g_A,
+                          digitized_truth=binned_E_A)
 
     fig, ax = plt.subplots()
     svd_values = unmerged_model.evaluate_condition()
@@ -288,6 +299,7 @@ if __name__ == '__main__':
     print('Calculating Eff sample size')
     n_eff = sol_mcmc.calc_effective_sample_size(sample, n_threads=9)
     print(n_eff)
+    exit()
     std = np.std(sample, axis=0)
     str_0 = 'unregularized:'
     str_1 = ''

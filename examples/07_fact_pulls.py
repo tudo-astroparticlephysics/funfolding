@@ -27,15 +27,12 @@ def do_single_pull(obs_array_binning,
 
     tree_binning = binning.TreeBinningSklearn(
         regression=False,
-        max_features=None,
-        min_samples_split=2,
-        max_depth=None,
         min_samples_leaf=min_samples_leaf * 10,
         random_state=random_state)
     tree_binning.fit(obs_array_binning,
                      y_binning)
     binned_g_A = tree_binning.digitize(obs_array_A)
-    binned_g_test = tree_binning.digitize(obs_array[idx_test])
+    binned_g_test = tree_binning.digitize(obs_array_test)
     tree_model = model.LinearModel()
     tree_model.initialize(digitized_obs=binned_g_A,
                           digitized_truth=y_A)
@@ -171,6 +168,11 @@ if __name__ == '__main__':
 
             for i, (idx_test, idx_A, idx_binning) in enumerate(
                     pull_mode_iterator):
+                while True:
+                    if future_callback.running < n_jobs:
+                        break
+                    else:
+                        time.sleep(1)
                 future = executor.submit(
                     do_single_pull,
                     obs_array_binning=obs_array[idx_binning],
@@ -182,13 +184,6 @@ if __name__ == '__main__':
                     random_state=random_seed + i)
                 future.add_done_callback(future_callback)
                 future_callback.running += 1
-                while True:
-                    if future_callback.running < n_jobs:
-                        break
-                    else:
-                        time.sleep(1)
-            while future_callback.finished < n_pulls:
-                time.sleep(1)
     else:
         p_values = np.zeros(n_pulls)
         for i, (idx_test, idx_A, idx_binning) in enumerate(pull_mode_iterator):
