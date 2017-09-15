@@ -1,4 +1,5 @@
 import logging
+import os
 
 import pandas as pd
 import numpy as np
@@ -10,7 +11,6 @@ from matplotlib import pyplot as plt
 
 from funfolding import binning, model, solution
 from funfolding.visualization.visualize_classic_binning import plot_binning
-from funfolding.visualization.visualize_classic_binning import mark_bin
 
 import corner
 from scipy import linalg
@@ -32,6 +32,10 @@ if __name__ == '__main__':
 
 
     random_state = np.random.RandomState(random_seed)
+    if not os.path.isfile('fact_simulations.hdf'):
+        from get_fact_simulations import download
+        logging.info('Downloading FACT simulations!')
+        download()
     df = pd.read_hdf('fact_simulations.hdf', 'gamma_simulation')
 
     binned_E = np.digitize(df.loc[:, 'log10(energy)'],
