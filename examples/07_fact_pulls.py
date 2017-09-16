@@ -82,7 +82,7 @@ if __name__ == '__main__':
                       default=1)
     (options, args) = parser.parse_args()
 
-    random_seed = 1340
+    random_seed = 1338
     n_pulls = 5000
     n_walker = 100
     n_steps_used = 2000
@@ -199,7 +199,7 @@ if __name__ == '__main__':
             logging.info('\tP-Value: {0:.2f}'.format(p_values[i]))
 
     fig, ax = plt.subplots()
-    ax.hist(p_values)
+    ax.hist(p_values, bins=10)
     ax.set_xlabel('P Values')
     ax.set_ylabel('Frequency')
     fig.savefig('07_p_values.png')

@@ -91,8 +91,6 @@ class StandardLLH(LLH):
         else:
             self.vec_acceptance = np.ones(model.dim_f)
 
-        self._A_c = np.diag(self.vec_acceptance)
-
         if self.tau is None:
             self._tau = None
         else:
@@ -116,9 +114,7 @@ class StandardLLH(LLH):
                 if m_C is None:
                     raise ValueError("{} invalid option for 'C'".format(
                         self.C))
-                m_C_l = np.dot(self._A_c, m_C)
-                m_C_r = np.dot(m_C, self._A_c)
-                self._C = np.dot(np.dot(m_C_l, np.diag(self._tau)), m_C_r)
+                self._C = np.dot(np.dot(m_C, np.diag(self._tau)), m_C)
 
         if isinstance(model, LinearModel):
             self.gradient_defined = True
@@ -134,11 +130,11 @@ class StandardLLH(LLH):
             f_reg_used = f_reg * self.vec_acceptance
             if self.log_f_reg:
                 f_reg_used = np.log10(f_reg_used + 1)
-            regularization_part = 0.5 * np.dot(
+            reg_part = 0.5 * np.dot(
                 np.dot(f_reg_used.T, self._C), f_reg_used)
         else:
-            regularization_part = 0
-        return poisson_part - regularization_part
+            reg_part = 0
+        return poisson_part - reg_part
 
     def evaluate_neg_llh(self, f):
         return self.evaluate_llh(f) * -1.
@@ -150,16 +146,24 @@ class StandardLLH(LLH):
         h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
         h_unreg -= part_b
         if self._tau is not None:
-            f_reg_used = f_reg * self.vec_acceptance
             if self.log_f_reg:
-                raise NotImplementedError(
-                    'log_f_reg not supported for gradients')
-                f_reg_used = np.log10(f_reg_used + 1)
-            regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
-                self.C, f_reg_used)
+                reg_part = np.zeros(self.model.dim_f)
+                f_used = f_reg * self.vec_acceptance + 1
+                ln_f_used = np.log(f_used)
+                ln_10_squared = np.log(10)**2
+                for i in range(self.model.dim_f):
+                    for j in range(self.model.dim_f):
+                        reg_part_ij = self.vec_acceptance[i] * self._C[i, j]
+                        reg_part_ij *= ln_f_used[j]
+                        reg_part_ij /= ln_10_squared * f_used[i]
+                        if i == j:
+                            reg_part_ij *= 2.
+                        reg_part[i] += reg_part_ij
+            else:
+                reg_part = np.dot(self._C, f_reg * self.vec_acceptance)
         else:
-            regularization_part = 0.
-        return h_unreg - regularization_part
+            reg_part = 0.
+        return h_unreg - reg_part
 
     def evaluate_neg_gradient(self, f):
         return self.evaluate_gradient(f) * -1.
@@ -172,13 +176,46 @@ class StandardLLH(LLH):
                           self.model.A)
         if self._tau is not None:
             if self.log_f_reg:
-                raise NotImplementedError(
-                    'log_f_reg not supported for hessian')
-            regularization_part = self.tau * self.C
-        else:
-            regularization_part = 0.
+                reg_part = np.zeros((self.model.dim_f,
+                                     self.model.dim_f))
+                f_used = f_reg * self.vec_acceptance + 1
+                ln_f_used = np.log(f_used)
+                ln_10_squared = np.log(10)**2
+                pre_nondiag = np.zeros_like(reg_part)
+                pre_diag = np.zeros_like(reg_part)
+                for i in range(self.model.dim_f):
+                    for j in range(self.model.dim_f):
+                        p_i_j = self._C[i, j] * self.vec_acceptance[i]**2
+                        if i == j:
+                            p_i_j *= (ln_f_used[i] - 1) * 2
+                        else:
+                            p_i_j *= ln_f_used[j]
+                        p_i_j /= ln_10_squared * f_used[i]**2
+                        pre_diag[i, j] = p_i_j
 
-        return H_unreg - regularization_part
+                        if i == j:
+                            p_i_j = 0.
+                        else:
+                            p_i_j = self._C[i, j] * self.vec_acceptance[i] * \
+                                self.vec_acceptance[j]
+                            p_i_j *= ln_f_used[j]
+                            p_i_j /= ln_10_squared * f_used[i] * f_used[j]
+                        pre_nondiag[i, j] = p_i_j
+
+                for i in range(self.model.dim_f):
+                    for j in range(i + 1):
+                        if i == j:
+                            reg_part[i, i] = np.sum(pre_diag[i, :])
+                        else:
+                            r = np.sum(pre_nondiag[i, :])
+                            reg_part[i, j] = r
+                            reg_part[j, i] = r
+            else:
+                reg_part = np.dot(self._C, f_reg * self.vec_acceptance)
+        else:
+            reg_part = 0.
+
+        return H_unreg - reg_part
 
     def evaluate_neg_hessian(self, f):
         return self.evaluate_hessian(f) * -1.
