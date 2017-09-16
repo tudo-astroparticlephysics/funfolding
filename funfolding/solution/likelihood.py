@@ -201,7 +201,6 @@ class StandardLLH(LLH):
                             p_i_j *= ln_f_used[j]
                             p_i_j /= ln_10_squared * f_used[i] * f_used[j]
                         pre_nondiag[i, j] = p_i_j
-
                 for i in range(self.model.dim_f):
                     for j in range(i + 1):
                         if i == j:
