@@ -14,7 +14,7 @@ def create_C_thikonov(n_dims):
         C[i, i + 1] = 1
     C[idx_N, idx_N] = -1
     C[idx_N, idx_N - 1] = 1
-    return np.dot(C.T, C)
+    return C
 
 
 class LLH(object):
@@ -114,7 +114,7 @@ class StandardLLH(LLH):
                 if m_C is None:
                     raise ValueError("{} invalid option for 'C'".format(
                         self.C))
-                self._C = np.dot(np.dot(m_C, np.diag(self._tau)), m_C)
+                self._C = np.dot(np.dot(m_C, np.diag(1 / self._tau)), m_C)
 
         if isinstance(model, LinearModel):
             self.gradient_defined = True

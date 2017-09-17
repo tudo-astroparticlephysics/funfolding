@@ -16,6 +16,25 @@ import corner
 from scipy import linalg
 
 
+def generate_acceptance_correction(vec_f_truth,
+                                   binning,
+                                   logged_truth):
+    e_min = 200
+    e_max = 50000
+    gamma = -2.7
+    n_showers = 12000000
+    if logged_truth:
+        binning = np.power(10., binning)
+    normalization = (gamma + 1) / (e_max ** (gamma + 1) - e_min ** (gamma + 1))
+    corsika_cdf = lambda E: normalization * E ** (gamma + 1) / (gamma + 1)
+    vec_acceptance = np.zeros_like(vec_f_truth, dtype=float)
+    for i, vec_i_detected in enumerate(vec_f_truth):
+        p_bin_i = corsika_cdf(binning[i + 1]) - corsika_cdf(binning[i])
+        vec_acceptance[i] = p_bin_i * n_showers / vec_i_detected
+    return vec_acceptance
+
+
+
 if __name__ == '__main__':
     logging.captureWarnings(True)
     logging.basicConfig(
@@ -24,10 +43,12 @@ if __name__ == '__main__':
 
 
     random_seed = 1340
-    n_walker = 100
+    n_walkers = 100
     n_steps_used = 2000
     n_samples_test = 5000
     min_samples_leaf = 20
+    tau = 1.
+
     binning_E = np.linspace(2.4, 4.2, 10)
 
 
@@ -226,7 +247,16 @@ if __name__ == '__main__':
     vec_g, vec_f = tree_model.generate_vectors(binned_g_test,
                                                binned_E_test)
 
-    llh = solution.StandardLLH(tau=None,
+    vec_f_truth = np.array(np.bincount(binned_E), dtype=float)[1:]
+    vec_acceptance = generate_acceptance_correction(vec_f_truth,
+                                                    binning_E,
+                                                    True)
+    vec_f_truth /= np.sum(vec_f_truth)
+    vec_f_truth *= n_samples_test
+
+    llh = solution.StandardLLH(tau=tau,
+                               log_f=True,
+                               vec_acceptance=vec_acceptance,
                                C='thikonov')
     llh.initialize(vec_g=vec_g,
                     model=tree_model)
@@ -238,13 +268,46 @@ if __name__ == '__main__':
     sol_gd.set_x0_and_bounds()
     x, llh_values, gradient, hessian = sol_gd.fit()
     idx_best = np.argmax(llh_values)
-    str_0 = 'unregularized:'
-    str_1 = ''
-    for f_i_est, f_i in zip(x[idx_best], vec_f):
-        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
-    print('{}\t{}'.format(str_0, str_1))
-    covariance = linalg.inv(hessian[-1] * -1)
-    print(np.sqrt(np.diag(covariance)))
+    vec_f_str = ', '.join('{0:.2f}'.format(a)
+                          for a in x[idx_best])
+    logging.info('Best Fit (Gradient):\t{}\t(LLH: {})'.format(
+        vec_f_str,
+        llh_values[idx_best]))
+
+
+    sol_mini = solution.LLHSolutionMinimizer()
+    sol_mini.initialize(llh=llh, model=tree_model)
+    sol_mini.set_x0_and_bounds(x0=x[idx_best])
+    best_fit, mini_cov = sol_mini.fit(constrain_N=False)
+
+    vec_f_str = ', '.join('{0:.2f}'.format(a)
+                          for a in best_fit.x)
+    logging.info('Best Fit (Minimizer):\t{}\t(LLH: {})'.format(
+        vec_f_str,
+        best_fit.fun))
+
+    sol_mcmc = solution.LLHSolutionMCMC(n_burn_steps=100,
+                                        n_used_steps=n_steps_used,
+                                        n_walkers=n_walkers,
+                                        random_state=random_state)
+    sol_mcmc.initialize(llh=llh, model=tree_model)
+    sol_mcmc.set_x0_and_bounds(x0=best_fit.x)
+    vec_f_est_mcmc, sigma_vec_f, sample, probs = sol_mcmc.fit()
+
+    vec_f_str = ', '.join('{0:.2f}'.format(a)
+                          for a in vec_f_est_mcmc)
+    logging.info('Best Fit (MCMC):\t{}\t(LLH: {})'.format(
+        vec_f_str,
+        max(probs)))
+
+    sol_mcmc.n_threads = 9
+    logging.info('Calculating Eff sample size:')
+    n_eff = sol_mcmc.calc_effective_sample_size(sample, n_threads=9)
+    n_eff_str = ', '.join(str(n) for n in n_eff)
+    logging.info('per Walker:\t{} ({} Walker with {} steps)'.format(
+        n_eff_str,
+        n_walkers,
+        n_steps_used))
 
     def create_llh_slice(llh, best_fit, selected_bin=None):
         if selected_bin is None:
@@ -289,104 +352,31 @@ if __name__ == '__main__':
         plt.close(fig)
         return selected_bin
 
-    create_llh_slice(llh, x[idx_best])
+    logging.info('Creating plot of a LLH slice')
+    create_llh_slice(llh, best_fit.x)
 
-    print('\nMCMC Solution: (constrained: sum(vec_f) == sum(vec_g)) :')
-    sol_mcmc = solution.LLHSolutionMCMC(n_burn_steps=100,
-                                        n_used_steps=1000,
-                                        n_walker=100,
-                                        random_state=random_state)
-    sol_mcmc.initialize(llh=llh, model=tree_model)
-    sol_mcmc.set_x0_and_bounds(x0=x[idx_best])
-    vec_f_est_mcmc, sigma_vec_f, sample, probs = sol_mcmc.fit()
-    sol_mcmc.n_threads = 9
-    print('Calculating Eff sample size')
-    n_eff = sol_mcmc.calc_effective_sample_size(sample, n_threads=9)
-    print(n_eff)
-    exit()
-    std = np.std(sample, axis=0)
-    str_0 = 'unregularized:'
-    str_1 = ''
-    for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
-        str_1 += '{0:.2f}\t'.format(f_i_est / f_i)
-    print('{}\t{}'.format(str_0, str_1))
-
-    exit()
-
+    logging.info('Creating corner plot')
     corner_fig = corner.corner(sample,
-                               #truths=vec_f_est_mcmc,
-                               #truth_color='r',
+                               truths=vec_f_est_mcmc,
+                               truth_color='r',
                                rasterized=True)
     corner_fig.savefig('05_corner_fact.png')
 
-
-    def add_path_to_corner_plot(corner_fig, points, step_size=1):
-        used_points = points[::step_size]
-        axes = corner_fig.axes
-
-        for n in range(len(used_points)):
-            lines = []
-            pointer = -1
-            points = used_points[:n+1]
-            for i_y in range(points.shape[1]):
-                for i_x in range(points.shape[1]):
-                    pointer += 1
-                    ax = axes[pointer]
-                    if i_x > i_y:
-                        continue
-                    elif i_x == i_y:
-                        x_lims = ax.get_xlim()
-                        p_x = points[:, i_x]
-                        x_in_range = np.logical_and(x_lims[0] < p_x,
-                                                    x_lims[1] > p_x)
-                        if sum(x_in_range) > 0:
-                            p_x = points[x_in_range, i_x]
-                            lines.append(ax.axvline(p_x[-1], color='b'))
-                    else:
-                        x_lims = ax.get_xlim()
-                        y_lims = ax.get_ylim()
-                        p_x = points[:, i_x]
-                        p_y = points[:, i_y]
-                        x_in_range = np.logical_and(x_lims[0] < p_x,
-                                                    x_lims[1] > p_x)
-                        y_in_range = np.logical_and(y_lims[0] < p_y,
-                                                    y_lims[1] > p_y)
-                        in_range = np.logical_and(x_in_range, y_in_range)
-                        if sum(in_range) > 0:
-                            p_x = points[in_range, i_x]
-                            p_y = points[in_range, i_y]
-                            lines.append(ax.plot(p_x, p_y, 'o-', color='b'))
-            if len(lines) > 0:
-                corner_fig.savefig(
-                    'gif_jpgs/05_corner_numbers_{}.jpg'.format(n),
-                    figsize=(8, 8),
-                    dpi=50)
-            for l in lines:
-                try:
-                    l.pop(0).remove()
-                except AttributeError:
-                    l.remove()
-
-
-    add_path_to_corner_plot(corner_fig, x, step_size=10)
-
+    logging.info('Creating best fit plots')
     fig, ax = plt.subplots(1, 1, figsize=(6, 4))
     bin_mids = (binning_E[1:] + binning_E[:-1]) / 2.
     bin_width = (binning_E[1:] - binning_E[:-1]) / 2.
-    _, vec_f_truth = tree_model.generate_vectors(binned_g,
-                                                 binned_E)
-    vec_f_truth = vec_f_truth * sum(vec_f) / sum(vec_f_truth)
     plt.hist(bin_mids, bins=binning_E, weights=vec_f_truth, histtype='step')
     ax.errorbar(bin_mids,
-                vec_f_est_mcmc,
-                yerr=std,
+                best_fit.x,
+                yerr=np.sqrt(np.diag(np.absolute(mini_cov))),
                 xerr=bin_width,
                 ls="",
                 color="k",
-                label="Unfolding (Error: Std)")
+                label="Unfolding (Minimizer)")
     ax.set_yscale("log", nonposy='clip')
     ax.set_ylim([2e1, 2e3])
-    fig.savefig('05_unfolding_mcmc_std.png')
+    fig.savefig('05_unfolding_minimizer.png')
     plt.close(fig)
 
 
@@ -399,19 +389,13 @@ if __name__ == '__main__':
                 xerr=bin_width,
                 ls="",
                 color="r",
-                label="Unfolding (Error: Bayesian)")
+                label="Unfolding (MCMC)")
     ax.set_yscale("log", nonposy='clip')
     ax.set_ylim([2e1, 2e3])
-    fig.savefig('05_unfolding_mcmc_bayesian.png')
+    fig.savefig('05_unfolding_mcmc.png')
     plt.close(fig)
 
-
-
-    import cPickle
-
-    with open('probs.dat', 'wb') as f:
-        cPickle.dump(probs, f)
-
+    logging.info('Creating LLH histogram')
     fig, ax = plt.subplots(1, 1, figsize=(6, 4.5))
     ax.hist(2*(np.max(probs) - probs),
             bins=50,

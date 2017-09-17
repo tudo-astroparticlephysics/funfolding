@@ -140,7 +140,7 @@ class LLHSolutionMinimizer(Solution):
                             method='SLSQP',
                             constraints=cons)
         try:
-            hess_matrix = self.llh.evaluate_neg_hesse_matrix(solution.x)
+            hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
             V_f_est = linalg.inv(hess_matrix)
         except NotImplementedError:
             V_f_est = None
@@ -186,7 +186,7 @@ class LLHSolutionMCMC(Solution):
     status_need_for_fit = 1
 
     def __init__(self,
-                 n_walker=100,
+                 n_walkers=100,
                  n_used_steps=2000,
                  n_burn_steps=1000,
                  n_threads=1,
@@ -196,7 +196,7 @@ class LLHSolutionMCMC(Solution):
             random_state = np.random.RandomState(random_state)
         self.random_state = random_state
 
-        self.n_walker = n_walker
+        self.n_walkers = n_walkers
         self.n_used_steps = n_used_steps
         self.n_burn_steps = n_burn_steps
         self.n_threads = n_threads
@@ -221,11 +221,11 @@ class LLHSolutionMCMC(Solution):
     def fit(self):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
-        pos_x0 = np.zeros((self.n_walker, self.model.dim_f), dtype=float)
+        pos_x0 = np.zeros((self.n_walkers, self.model.dim_f), dtype=float)
         for i, x0_i in enumerate(self.x0):
             if x0_i < 1.:
                 x0_i += self.min_x0
-            pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walker)
+            pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walkers)
         pos_x0[pos_x0 == 0] = self.min_x0
         sampler = self.__initiallize_mcmc__()
         vec_f, samples, probs = self.__run_mcmc__(sampler,
@@ -235,7 +235,7 @@ class LLHSolutionMCMC(Solution):
         return vec_f, sigma_vec_f, samples, probs
 
     def __initiallize_mcmc__(self):
-        return emcee.EnsembleSampler(nwalkers=self.n_walker,
+        return emcee.EnsembleSampler(nwalkers=self.n_walkers,
                                      dim=self.model.dim_f,
                                      lnpostfn=self.llh.evaluate_llh,
                                      threads=self.n_threads)
@@ -262,7 +262,7 @@ class LLHSolutionMCMC(Solution):
         It is based on the
         Internally the sample is reshaped to
         (n_walkers, n_samples_per_walker, dims_f). Changing the
-        n_walker attribute of the instance will break the calculation.
+        n_walkers attribute of the instance will break the calculation.
 
         Parameters
         ----------
@@ -302,7 +302,7 @@ class LLHSolutionMCMC(Solution):
         elif not isinstance(n_threads, int):
             raise ValueError('\'n_threads\' has to be int or None!')
         dim_f = sample.shape[1]
-        sample = sample.reshape((self.n_walker,
+        sample = sample.reshape((self.n_walkers,
                                  self.n_used_steps,
                                  dim_f))
 
