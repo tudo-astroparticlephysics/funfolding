@@ -34,13 +34,11 @@ def generate_acceptance_correction(vec_f_truth,
     return vec_acceptance
 
 
-
 if __name__ == '__main__':
     logging.captureWarnings(True)
     logging.basicConfig(
         format='%(processName)-10s %(name)s %(levelname)-8s %(message)s',
         level=logging.INFO)
-
 
     random_seed = 1340
     n_walkers = 100
@@ -48,9 +46,7 @@ if __name__ == '__main__':
     n_samples_test = 5000
     min_samples_leaf = 20
     tau = 1.
-
     binning_E = np.linspace(2.4, 4.2, 10)
-
 
     random_state = np.random.RandomState(random_seed)
     if not os.path.isfile('fact_simulations.hdf'):
@@ -78,7 +74,6 @@ if __name__ == '__main__':
     binned_E_test = binned_E[idx_test]
     binned_E_binning = binned_E[idx_binning]
     binned_E_A = binned_E[idx_A]
-
 
     obs_array = df.get(['log10(ConcCore)', 'log10(E_RF)']).values
 
@@ -259,8 +254,7 @@ if __name__ == '__main__':
                                vec_acceptance=vec_acceptance,
                                C='thikonov')
     llh.initialize(vec_g=vec_g,
-                    model=tree_model)
-
+                   model=tree_model)
 
     sol_gd = solution.LLHSolutionGradientDescent(n_steps=500,
                                                  gamma=0.01)
@@ -273,7 +267,6 @@ if __name__ == '__main__':
     logging.info('Best Fit (Gradient):\t{}\t(LLH: {})'.format(
         vec_f_str,
         llh_values[idx_best]))
-
 
     sol_mini = solution.LLHSolutionMinimizer()
     sol_mini.initialize(llh=llh, model=tree_model)
@@ -300,14 +293,14 @@ if __name__ == '__main__':
         vec_f_str,
         max(probs)))
 
-    sol_mcmc.n_threads = 9
-    logging.info('Calculating Eff sample size:')
-    n_eff = sol_mcmc.calc_effective_sample_size(sample, n_threads=9)
-    n_eff_str = ', '.join(str(n) for n in n_eff)
-    logging.info('per Walker:\t{} ({} Walker with {} steps)'.format(
-        n_eff_str,
-        n_walkers,
-        n_steps_used))
+    # sol_mcmc.n_threads = 9
+    # logging.info('Calculating Eff sample size:')
+    # n_eff = sol_mcmc.calc_effective_sample_size(sample, n_threads=9)
+    # n_eff_str = ', '.join(str(n) for n in n_eff)
+    # logging.info('per Walker:\t{} ({} Walker with {} steps)'.format(
+    #     n_eff_str,
+    #     n_walkers,
+    #     n_steps_used))
 
     def create_llh_slice(llh, best_fit, selected_bin=None):
         if selected_bin is None:
@@ -336,7 +329,11 @@ if __name__ == '__main__':
             hess_lower_y = gradient_values[i] - (diff * hessian_values[i])
             hess_upper_y = gradient_values[i] + (diff * hessian_values[i])
 
-            ax.arrow(0, 0, 0.5, 0.5, head_width=0.05, head_length=0.1, fc='k', ec='k')
+            ax.arrow(0, 0, 0.5, 0.5,
+                     head_width=0.05,
+                     head_length=0.1,
+                     fc='k',
+                     ec='k')
 
             ax_grad.plot([lower_x, upper_x],
                          [grad_lower_y, grad_upper_y],

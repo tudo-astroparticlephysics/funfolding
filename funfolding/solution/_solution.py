@@ -172,9 +172,10 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
         hessian[0, :, :] = self.llh.evaluate_hessian(self.x0)
 
         for i in range(1, self.n_steps):
-            H_inv = linalg.inv(hessian[i-1])
-            delta_x = -np.dot(H_inv, gradient[i-1, :]) * self.gamma
+            H_inv = linalg.inv(hessian[i - 1])
+            delta_x = -np.dot(H_inv, gradient[i - 1, :]) * self.gamma
             x[i, :] = x[i - 1, :] + delta_x
+            x[i, x[i, :] < 0] = 0.
             llh[i] = self.llh.evaluate_llh(x[i, :])
             gradient[i, :] = self.llh.evaluate_gradient(x[i, :])
             hessian[i, :, :] = self.llh.evaluate_hessian(x[i, :])

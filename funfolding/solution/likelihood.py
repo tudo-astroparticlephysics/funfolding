@@ -151,14 +151,18 @@ class StandardLLH(LLH):
                 f_used = f_reg * self.vec_acceptance + 1
                 ln_f_used = np.log(f_used)
                 ln_10_squared = np.log(10)**2
+                pre = np.zeros((self.model.dim_f,
+                                self.model.dim_f))
                 for i in range(self.model.dim_f):
                     for j in range(self.model.dim_f):
-                        reg_part_ij = self.vec_acceptance[i] * self._C[i, j]
-                        reg_part_ij *= ln_f_used[j]
-                        reg_part_ij /= ln_10_squared * f_used[i]
-                        if i == j:
-                            reg_part_ij *= 2.
-                        reg_part[i] += reg_part_ij
+                        pre_part_ij = self.vec_acceptance[i] * self._C[i, j]
+                        pre_part_ij *= ln_f_used[j]
+                        pre_part_ij /= ln_10_squared * f_used[i]
+                        pre[i] += pre_part_ij
+                for i in range(self.model.dim_f):
+                    reg_part_i = np.sum(pre[i, :])
+                    reg_part_i += np.sum(pre[:, i])
+
             else:
                 reg_part = np.dot(self._C, f_reg * self.vec_acceptance)
         else:
@@ -187,26 +191,24 @@ class StandardLLH(LLH):
                     for j in range(self.model.dim_f):
                         p_i_j = self._C[i, j] * self.vec_acceptance[i]**2
                         if i == j:
-                            p_i_j *= (ln_f_used[i] - 1) * 2
+                            p_i_j *= ln_f_used[i] - 1
                         else:
                             p_i_j *= ln_f_used[j]
                         p_i_j /= ln_10_squared * f_used[i]**2
                         pre_diag[i, j] = p_i_j
-
-                        if i == j:
-                            p_i_j = 0.
-                        else:
+                        if i != j:
                             p_i_j = self._C[i, j] * self.vec_acceptance[i] * \
                                 self.vec_acceptance[j]
-                            p_i_j *= ln_f_used[j]
                             p_i_j /= ln_10_squared * f_used[i] * f_used[j]
-                        pre_nondiag[i, j] = p_i_j
+                            pre_nondiag[i, j] = p_i_j
                 for i in range(self.model.dim_f):
                     for j in range(i + 1):
                         if i == j:
                             reg_part[i, i] = np.sum(pre_diag[i, :])
+                            reg_part[i, i] += np.sum(pre_diag[:, i])
                         else:
-                            r = np.sum(pre_nondiag[i, :])
+                            r = pre_nondiag[j, j]
+                            r += pre_nondiag[i, j]
                             reg_part[i, j] = r
                             reg_part[j, i] = r
             else:
