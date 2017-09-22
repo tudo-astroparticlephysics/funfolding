@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 
 from funfolding import binning, model, solution
 from funfolding.visualization.visualize_classic_binning import plot_binning
+from funfolding.visualization.visualize_llh import plot_llh_slice
 
 import corner
 from scipy import linalg
@@ -282,6 +283,7 @@ if __name__ == '__main__':
     sol_mcmc = solution.LLHSolutionMCMC(n_burn_steps=100,
                                         n_used_steps=n_steps_used,
                                         n_walkers=n_walkers,
+                                        n_threads=1,
                                         random_state=random_state)
     sol_mcmc.initialize(llh=llh, model=tree_model)
     sol_mcmc.set_x0_and_bounds(x0=best_fit.x)
@@ -307,13 +309,13 @@ if __name__ == '__main__':
             selected_bin = np.argmax(best_fit)
         points = np.linspace(0.9 * best_fit[selected_bin],
                              1.1 * best_fit[selected_bin],
-                             101)
+                             31)
         llh_values = np.zeros_like(points)
         gradient_values = np.zeros_like(points)
         hessian_values = np.zeros_like(points)
 
         fig, [ax_grad, ax_hess] = plt.subplots(2, 1, figsize=(24, 18))
-        diff = np.diff(points)[0] / 2.
+        diff = np.diff(points)[0] / 1.5
         for i, p_i in enumerate(points):
             best_fit[selected_bin] = p_i
             llh_values[i] = llh.evaluate_llh(best_fit)
@@ -329,28 +331,31 @@ if __name__ == '__main__':
             hess_lower_y = gradient_values[i] - (diff * hessian_values[i])
             hess_upper_y = gradient_values[i] + (diff * hessian_values[i])
 
-            ax.arrow(0, 0, 0.5, 0.5,
-                     head_width=0.05,
-                     head_length=0.1,
-                     fc='k',
-                     ec='k')
-
-            ax_grad.plot([lower_x, upper_x],
-                         [grad_lower_y, grad_upper_y],
-                         'k-')
+            if gradient_values[i] < 0:
+                direction = -1.
+            else:
+                direction = 1.
 
             ax_hess.plot([lower_x, upper_x],
                          [hess_lower_y, hess_upper_y],
                          'k-')
 
-        ax_grad.plot(points, llh_values, 'o')
+
+        dy = gradient_values * diff
+        dx = np.ones_like(points) * diff
+        dx[gradient_values < 0] *= -1.
+        dy[gradient_values < 0] *= -1.
+
+        ax_grad.quiver(points, llh_values, dx, dy, angles='xy', scale_units='xy', scale=1.)
+        ax_grad.plot(best_fit[selected_bin], llh_values[selected_bin], 'ro')
         ax_hess.plot(points, gradient_values, 'o')
         fig.savefig('05_llh_scan.png')
         plt.close(fig)
         return selected_bin
 
     logging.info('Creating plot of a LLH slice')
-    create_llh_slice(llh, best_fit.x)
+    fig = plot_llh_slice(llh, best_fit.x)
+    fig.savefig('05_llh_slice.png')
 
     logging.info('Creating corner plot')
     corner_fig = corner.corner(sample,

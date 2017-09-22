@@ -32,6 +32,7 @@ def recursive_feature_selection_condition_validation(X_train,
                                                      binning,
                                                      backwards=False,
                                                      n_jobs=1,
+                                                     n_folds=1,
                                                      X_merge=None,
                                                      merge_kw={}):
     '''Funciton that does a backware elimination/forward selection passed on
