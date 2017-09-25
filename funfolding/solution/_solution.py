@@ -239,7 +239,7 @@ class LLHSolutionMCMC(Solution):
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,
                                      dim=self.model.dim_f,
-                                     lnpostfn=self.llh,#.evaluate_llh,
+                                     lnpostfn=self.llh,
                                      threads=self.n_threads)
 
     def __run_mcmc__(self, sampler, x0, n_steps):

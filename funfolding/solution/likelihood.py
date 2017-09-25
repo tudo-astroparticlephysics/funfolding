@@ -349,7 +349,7 @@ class StandardLLH(LLH):
         if self._tau is not None:
             if self.log_f_reg:
                 pre = np.dot(np.dot(np.diag(f_reg + 1), self._C),
-                                  np.diag(f_reg + 1)) / np.log(10)**2
+                             np.diag(f_reg + 1)) / np.log(10)**2
                 ln_f_used = np.log((f_reg + 1) * self.vec_acceptance)
                 pre_diag_1 = np.dot(pre, np.diag(ln_f_used))
                 pre_diag_2 = np.dot(np.diag(ln_f_used), pre)
@@ -358,9 +358,9 @@ class StandardLLH(LLH):
                     for j in range(i + 1):
                         r = pre[i, j] + pre[j, i]
                         if i == j:
-                             r += np.sum(pre_diag_1, axis=1)
-                             r += np.sum(pre_diag_2, axis=1)
-                             reg_part[i, j]
+                            r += np.sum(pre_diag_1, axis=1)
+                            r += np.sum(pre_diag_2, axis=1)
+                            reg_part[i, j]
                         else:
                             reg_part[i, j] = r
                             reg_part[j, i] = r
@@ -373,7 +373,6 @@ class StandardLLH(LLH):
 
     def evaluate_neg_hessian(self, f):
         return self.evaluate_hessian(f) * -1.
-
 
 
 class LLHThikonovForLoops:
