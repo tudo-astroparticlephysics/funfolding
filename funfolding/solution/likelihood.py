@@ -3,17 +3,19 @@ import numpy as np
 from ..model import LinearModel, Model
 
 
-def create_C_thikonov(n_dims):
+def create_C_thikonov(n_dims, crop_beginning=False, crop_end=False):
     C = np.zeros((n_dims, n_dims))
-    C[0, 0] = -1
-    C[0, 1] = 1
+    if not crop_beginning:
+        C[0, 0] = -1
+        C[0, 1] = 1
     idx_N = n_dims - 1
     for i in range(1, idx_N):
         C[i, i] = -2.
         C[i, i - 1] = 1
         C[i, i + 1] = 1
-    C[idx_N, idx_N] = -1
-    C[idx_N, idx_N - 1] = 1
+    if not crop_end:
+        C[idx_N, idx_N] = -1
+        C[idx_N, idx_N - 1] = 1
     return C
 
 
@@ -78,7 +80,9 @@ class StandardLLHAlt(LLH):
 
     def initialize(self,
                    vec_g,
-                   model):
+                   model,
+                   crop_C_beginning=False,
+                   crop_C_end=False):
         super(StandardLLH, self).initialize()
         if not isinstance(model, Model):
             raise ValueError("'model' has to be of type Model!")
@@ -110,7 +114,10 @@ class StandardLLHAlt(LLH):
             if self._tau is not None:
                 if isinstance(self.C, str):
                     if self.C.lower() == 'thikonov' or self.C.lower() == '2':
-                        m_C = create_C_thikonov(model.dim_f)
+                        m_C = create_C_thikonov(
+                            model.dim_f,
+                            crop_end=crop_C_end,
+                            crop_beginning=crop_C_beginning)
                 elif isinstance(self.C, int):
                     if self.C == 2:
                         m_C = create_C_thikonov(model.dim_f)
@@ -233,7 +240,9 @@ class StandardLLH(LLH):
 
     def initialize(self,
                    vec_g,
-                   model):
+                   model,
+                   crop_C_beginning=False,
+                   crop_C_end=False):
         super(StandardLLH, self).initialize()
         if not isinstance(model, Model):
             raise ValueError("'model' has to be of type Model!")
@@ -265,7 +274,10 @@ class StandardLLH(LLH):
             if self._tau is not None:
                 if isinstance(self.C, str):
                     if self.C.lower() == 'thikonov' or self.C.lower() == '2':
-                        m_C = create_C_thikonov(model.dim_f)
+                        m_C = create_C_thikonov(
+                            model.dim_f,
+                            crop_end=crop_C_end,
+                            crop_beginning=crop_C_beginning)
                 elif isinstance(self.C, int):
                     if self.C == 2:
                         m_C = create_C_thikonov(model.dim_f)

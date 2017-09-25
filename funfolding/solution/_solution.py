@@ -138,11 +138,12 @@ class LLHSolutionMinimizer(Solution):
                             x0=self.x0,
                             bounds=self.bounds,
                             method='SLSQP',
-                            constraints=cons)
+                            constraints=cons,
+                            options={'maxiter': 10000})
         try:
             hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
             V_f_est = linalg.inv(hess_matrix)
-        except NotImplementedError:
+        except:
             V_f_est = None
         return solution, V_f_est
 
