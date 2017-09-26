@@ -1,6 +1,6 @@
 import numpy as np
 
-from sklearn.model_selection import StratifiedKFold
+from concurrent.futures import ProcessPoolExecutor
 
 import funfolding as ff
 
@@ -22,7 +22,7 @@ def __train_eval__(idx,
                      digitized_truth=y_validation)
     singular_values = model.evaluate_condition()
 
-    return idx, min(singular_values) / max(singular_values)
+    return idx, max(singular_values) / min(singular_values)
 
 
 def recursive_feature_selection_condition_validation(X_train,
@@ -92,12 +92,12 @@ def recursive_feature_selection_condition_validation(X_train,
     unused = features.difference(order)
     while len(unused) > 0:
         condition = np.ones(len(unused)) * np.inf
-        job_params = []
+        task_params = []
         for i, feature in enumerate(unused):
             feature_set = order.union([feature])
             if backwards:
                 feature_set = features.difference(order.union(feature_set))
-            job_params.append((i, feature_set))
+            task_params.append((i, feature_set))
         if n_jobs > 1:
             from concurrent.futures import ProcessPoolExecutor
             import time
@@ -116,7 +116,7 @@ def recursive_feature_selection_condition_validation(X_train,
                 future_callback.running = 0
                 future_callback.finished = 0
 
-                for i, feature_set in job_params:
+                for i, feature_set in task_params:
                     while True:
                         if future_callback.running < n_jobs:
                             break
@@ -136,7 +136,7 @@ def recursive_feature_selection_condition_validation(X_train,
                     future.add_done_callback(future_callback)
                     future_callback.running += 1
         else:
-            for i, feature_set in job_params:
+            for i, feature_set in task_params:
                 if X_merge is not None:
                     X_merge = X_merge[:, feature_set]
                 condition[i] = __train_eval__(
@@ -158,15 +158,18 @@ def recursive_feature_selection_condition_validation(X_train,
     return order, final_condition
 
 
-def recursive_feature_selection_condition_cv(X,
-                                             y,
-                                             binning,
-                                             n_folds=5,
-                                             backwards=False,
-                                             n_jobs=1,
-                                             X_merge=None,
-                                             merge_kw={},
-                                             random_state=None):
+def recursive_feature_selection_condition_pulls(X,
+                                                y,
+                                                binning,
+                                                n_folds=5,
+                                                n_events_A=-1,
+                                                n_events_binning=0.2,
+                                                backwards=False,
+                                                n_jobs=1,
+                                                n_tasks_per_job=1,
+                                                X_merge=None,
+                                                merge_kw={},
+                                                random_state=None):
     '''Funciton that does a backware elimination/forward selection passed on
     the condition obtained.
 
@@ -221,62 +224,214 @@ def recursive_feature_selection_condition_cv(X,
     '''
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
-    order = set()
-    final_condition = []
-    features = set(range(X.shape[1]))
-    unused = features.difference(order)
+    order = []
+    final_condition_mean = np.zeros(X.shape[1])
+    final_condition_std = np.zeros(X.shape[1])
+    features = range(X.shape[1])
+    unused = [i for i in features if i not in order]
     while len(unused) > 0:
+        print('{}/{}'.format(len(order), len(features)))
+        print(order)
         condition = np.ones((len(unused), n_folds)) * np.inf
-        job_params = []
-        for i, feature in enumerate(unused):
-            feature_set = order.union([feature])
-            if backwards:
-                feature_set = features.difference(order.union(feature_set))
-            strat_kfold = StratifiedKFold(n_splits=n_folds,
-                                          shuffle=True,
-                                          random_state=random_state)
-            cv_iterator = strat_kfold.split(X, y)
-            for j, [train, test] in enumerate(cv_iterator):
-                job_params.append(((i, j), train, test, feature_set))
+
+        results = []
+
         if n_jobs > 1:
-            from concurrent.futures import ThreadPoolExecutor, wait
-            with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-                futures = []
-                if X_merge is not None:
-                    X_merge = X_merge[:, feature_set]
-                for idx, train, test, feature_set in job_params:
-                    if X_merge is not None:
-                        X_merge = X_merge[:, feature_set]
-                    futures.append(executor.submit(
-                        idx=idx,
-                        X_train=X[train, feature_set],
-                        y_train=y[train, feature_set],
-                        X_validation=X[test, feature_set],
-                        y_validation=y[test, feature_set],
-                        binning=binning,
-                        merge_kw=merge_kw,
-                        X_merge=X_merge))
-                results = wait(futures)
-            for future_i in results.done:
-                run_result = future_i.result()
-                condition[run_result[0][0], run_result[0][1]] = run_result[1]
+            from concurrent.futures import ProcessPoolExecutor
+            import time
+            with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+
+                def future_callback(future):
+                    print('Finished')
+                    future_callback.finished += 1
+                    if not future.cancelled():
+                        results.extend(future.result())
+                    else:
+                        raise RuntimeError('Subprocess crashed!')
+                    future_callback.running -= 1
+
+                future_callback.running = 0
+                future_callback.finished = 0
+
+                def submit(job_i_tasks):
+                    if len(job_i_tasks) == n_tasks_next_job:
+                        while True:
+                            if future_callback.running < n_jobs:
+                                print('Submitted {} !'.format(
+                                    len(job_i_tasks)))
+                                future = executor.submit(
+                                    __process_task_params__,
+                                    task_params=job_i_tasks,
+                                    binning=binning,
+                                    X=X,
+                                    y=y,
+                                    X_merge=X_merge,
+                                    merge_kw=merge_kw)
+                                future.add_done_callback(future_callback)
+                                future_callback.running += 1
+                                return []
+                            else:
+                                time.sleep(1)
+                    else:
+                        return job_i_tasks
+
+                job_i_tasks = []
+                n_tasks = n_folds * len(unused)
+                n_tasks_next_job = min(int(n_tasks // n_jobs), n_tasks_per_job)
+                for i, feature in enumerate(unused):
+                    feature_set = order + [feature]
+                    if backwards:
+                        feature_set = list(unused)
+                        feature_set.remove(feature)
+                    pull_mode_iterator = ff.pipeline.split_test_unfolding(
+                        n_iterations=n_folds,
+                        n_events_total=len(X),
+                        n_events_test=0,
+                        n_events_A=n_events_A,
+                        n_events_binning=n_events_binning,
+                        random_state=random_state)
+                    for j, [_, A, train] in enumerate(pull_mode_iterator):
+                        job_i_tasks.append(((i, j), train, A, feature_set))
+                        job_i_tasks = submit(job_i_tasks)
+                if len(job_i_tasks) > 0:
+                    print('Submitting last tasks')
+                    submit(job_i_tasks)
         else:
-            for idx, feature_set in job_params:
-                if X_merge is not None:
-                    X_merge = X_merge[:, feature_set]
-                condition[idx[0], idx[1]] = __train_eval__(
-                    idx=idx,
-                    X_train=X[train, feature_set],
-                    y_train=y[train, feature_set],
-                    X_validation=X[train, feature_set],
-                    y_validation=y[train, feature_set],
-                    binning=binning,
-                    merge_kw=merge_kw)
-        selected_feature = np.argmin(np.mean(condition, axis=1))
-        order.add(selected_feature)
-        unused = features.difference(order)
-    order = list(order)
+            for i, feature in enumerate(unused):
+                feature_set = order + [feature]
+                if backwards:
+                    feature_set = list(unused)
+                    feature_set.remove(feature)
+                pull_mode_iterator = ff.pipeline.split_test_unfolding(
+                    n_iterations=n_folds,
+                    n_events_total=len(X),
+                    n_events_test=0,
+                    n_events_A=n_events_A,
+                    n_events_binning=n_events_binning,
+                    random_state=random_state)
+                for j, [_, A, train] in enumerate(pull_mode_iterator):
+                    task_params = [((i, j), train, A, feature_set)]
+                    results.extend(__process_task_params__(
+                        task_params=task_params,
+                        binning=binning,
+                        X=X,
+                        y=y,
+                        X_merge=X_merge,
+                        merge_kw=merge_kw))
+        for idx, condition_i in results:
+            condition[idx[0], idx[1]] = condition_i
+        mean_condition = np.mean(condition, axis=1)
+        std_condition = np.std(condition, axis=1)
+        idx_best = np.argmin(mean_condition)
+        selected_feature = unused[idx_best]
+        final_condition_mean[len(order)] = mean_condition[idx_best]
+        final_condition_std[len(order)] = std_condition[idx_best]
+        order.append(selected_feature)
+        unused.remove(selected_feature)
     if backwards:
         order = order[::-1]
-        final_condition = final_condition[::-1]
-    return order, final_condition
+        final_condition_mean = final_condition_mean[::-1]
+        final_condition_std = final_condition_std[::-1]
+    return order, final_condition_mean, final_condition_std
+
+
+def __process_task_params__(task_params,
+                            binning,
+                            X,
+                            y,
+                            X_merge=None,
+                            merge_kw={}):
+    results = []
+    for idx, train, test, feature_set in task_params:
+        X_train = X[train, :][:, feature_set]
+        y_train = y[train]
+        X_test = X[test, :][:, feature_set]
+        y_test = y[test]
+        if X_merge is not None:
+            X_merge = X_merge[:, feature_set]
+        results.append(__train_eval__(idx=idx,
+                                      X_train=X_train,
+                                      y_train=y_train,
+                                      X_validation=X_test,
+                                      y_validation=y_test,
+                                      binning=binning,
+                                      merge_kw=merge_kw))
+    return results
+
+
+def recursive_feature_selection_condition_pulls_map(X,
+                                                    y,
+                                                    binning,
+                                                    n_folds=5,
+                                                    n_events_A=-1,
+                                                    n_events_binning=0.2,
+                                                    backwards=False,
+                                                    n_jobs=1,
+                                                    n_tasks_per_job=1,
+                                                    X_merge=None,
+                                                    merge_kw={},
+                                                    random_state=None):
+    if not isinstance(random_state, np.random.RandomState):
+        random_state = np.random.RandomState(random_state)
+    order = []
+    final_condition_mean = np.zeros(X.shape[1])
+    final_condition_std = np.zeros(X.shape[1])
+    features = range(X.shape[1])
+    unused = [i for i in features if i not in order]
+
+    while len(unused) > 0:
+        condition = np.ones((len(unused), n_folds)) * np.inf
+        results = []
+        feature_sets = []
+        idx = []
+        for i, feature in enumerate(unused):
+            feature_set = (order + [feature]) * n_folds
+            for j in range(n_folds):
+                idx.append((i, j))
+                feature_sets.append(feature_set)
+        pull_mode_iterator = ff.pipeline.split_test_unfolding(
+            n_iterations=n_folds,
+            n_events_total=len(X),
+            n_events_test=0,
+            n_events_A=n_events_A,
+            n_events_binning=n_events_binning,
+            random_state=random_state)
+        task_iterator = zip(idx, feature_sets, pull_mode_iterator)
+
+        def work_on_task(task_params):
+            idx = task_params[0]
+            feature_set = task_params[1]
+            _, A_idx, binning_idx = task_params[2]
+            X_train = X[binning_idx, :][:, feature_set]
+            y_train = y[binning_idx]
+            X_test = X[A_idx, :][:, feature_set]
+            y_test = y[A_idx]
+            binning.fit(X_train, y_train)
+            if X_merge is not None:
+                X_merge_task = X_merge[:, feature_set]
+                binning.merge(X_merge_task, **merge_kw)
+            binned_g_validation = binning.digitize(X_test)
+            model = ff.model.LinearModel()
+            model.initialize(digitized_obs=binned_g_validation,
+                             digitized_truth=y_test)
+            singular_values = model.evaluate_condition()
+
+            return idx, max(singular_values) / min(singular_values)
+
+        with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+            results = executor.map(work_on_task, task_iterator)
+        for idx, condition_i in results:
+            condition[idx[0], idx[1]] = condition_i
+        mean_condition = np.mean(condition, axis=1)
+        std_condition = np.std(condition, axis=1)
+        idx_best = np.argmin(mean_condition)
+        selected_feature = unused[idx_best]
+        final_condition_mean[len(order)] = mean_condition[idx_best]
+        final_condition_std[len(order)] = std_condition[idx_best]
+        order.append(selected_feature)
+        unused.remove(selected_feature)
+    if backwards:
+        order = order[::-1]
+        final_condition_mean = final_condition_mean[::-1]
+        final_condition_std = final_condition_std[::-1]
+    return order, final_condition_mean, final_condition_std
