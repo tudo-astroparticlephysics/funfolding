@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 
 from concurrent.futures import ProcessPoolExecutor
@@ -379,7 +381,13 @@ def recursive_feature_selection_condition_pulls_map(X,
     features = range(X.shape[1])
     unused = [i for i in features if i not in order]
 
+    work_on_task.X = X
+    work_on_task.y = y
+    work_on_task.X_merge = X_merge
+    work_on_task.merge_kw = merge_kw
+
     while len(unused) > 0:
+        print(order)
         condition = np.ones((len(unused), n_folds)) * np.inf
         results = []
         feature_sets = []
@@ -390,41 +398,47 @@ def recursive_feature_selection_condition_pulls_map(X,
                 idx.append((i, j))
                 feature_sets.append(feature_set)
         pull_mode_iterator = ff.pipeline.split_test_unfolding(
-            n_iterations=n_folds,
+            n_iterations=len(feature_sets),
             n_events_total=len(X),
             n_events_test=0,
             n_events_A=n_events_A,
             n_events_binning=n_events_binning,
             random_state=random_state)
-        task_iterator = zip(idx, feature_sets, pull_mode_iterator)
-
-        def work_on_task(task_params):
-            idx = task_params[0]
-            feature_set = task_params[1]
-            _, A_idx, binning_idx = task_params[2]
-            X_train = X[binning_idx, :][:, feature_set]
-            y_train = y[binning_idx]
-            X_test = X[A_idx, :][:, feature_set]
-            y_test = y[A_idx]
-            binning.fit(X_train, y_train)
-            if X_merge is not None:
-                X_merge_task = X_merge[:, feature_set]
-                binning.merge(X_merge_task, **merge_kw)
-            binned_g_validation = binning.digitize(X_test)
-            model = ff.model.LinearModel()
-            model.initialize(digitized_obs=binned_g_validation,
-                             digitized_truth=y_test)
-            singular_values = model.evaluate_condition()
-
-            return idx, max(singular_values) / min(singular_values)
 
         with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-            results = executor.map(work_on_task, task_iterator)
+
+            def future_callback(future):
+                future_callback.finished += 1
+                if not future.cancelled():
+                    results.append(future.result())
+                else:
+                    raise RuntimeError('Subprocess crashed!')
+                future_callback.running -= 1
+
+            future_callback.running = 0
+            future_callback.finished = 0
+
+            for i, indices in enumerate(pull_mode_iterator):
+                task_params_i = (idx[i],
+                                 feature_sets[i],
+                                 indices,
+                                 binning.copy())
+                while True:
+                    if future_callback.running < n_jobs:
+                        break
+                    else:
+                        time.sleep(1)
+                future = executor.submit(
+                    work_on_task,
+                    task_params=task_params_i)
+                future.add_done_callback(future_callback)
+                future_callback.running += 1
+
         for idx, condition_i in results:
             condition[idx[0], idx[1]] = condition_i
         mean_condition = np.mean(condition, axis=1)
         std_condition = np.std(condition, axis=1)
-        idx_best = np.argmin(mean_condition)
+        idx_best = np.argmax(mean_condition)
         selected_feature = unused[idx_best]
         final_condition_mean[len(order)] = mean_condition[idx_best]
         final_condition_std[len(order)] = std_condition[idx_best]
@@ -434,4 +448,31 @@ def recursive_feature_selection_condition_pulls_map(X,
         order = order[::-1]
         final_condition_mean = final_condition_mean[::-1]
         final_condition_std = final_condition_std[::-1]
+
+    work_on_task.X = None
+    work_on_task.y = None
+    work_on_task.X_merge = None
+    work_on_task.merge_kw = None
     return order, final_condition_mean, final_condition_std
+
+
+def work_on_task(task_params):
+    idx = task_params[0]
+    feature_set = task_params[1]
+    _, A_idx, binning_idx = task_params[2]
+    binning_i = task_params[3]
+    X_train = work_on_task.X[binning_idx, :][:, feature_set]
+    y_train = work_on_task.y[binning_idx]
+    X_test = work_on_task.X[A_idx, :][:, feature_set]
+    y_test = work_on_task.y[A_idx]
+    binning_i.fit(X_train, y_train)
+    if work_on_task.X_merge is not None:
+        X_merge_task = work_on_task.X_merge[:, feature_set]
+        binning_i.merge(X_merge_task, **work_on_task.merge_kw_)
+    binned_g_validation = binning_i.digitize(X_test)
+    model = ff.model.LinearModel()
+    model.initialize(digitized_obs=binned_g_validation,
+                     digitized_truth=y_test)
+    singular_values = model.evaluate_condition()
+
+    return idx, max(singular_values) / min(singular_values)
