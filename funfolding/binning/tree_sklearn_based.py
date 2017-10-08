@@ -219,6 +219,10 @@ class TreeBinningSklearn(Binning):
         ``N``, ``N_t``, ``N_t_R`` and ``N_t_L`` all refer to the weighted sum,
         if ``sample_weight`` is passed.
 
+    uniform : boolean, optional (default=False)
+        Only valid for a classification tree. If True a uniform
+        distribution is sampled before the model is trained.
+
     boosted : None or name of boosting algorithm, optional (default=None)
         If None no boosting is used. For boosting set to the name of
         the wanted algorithms. The base algorithm is the sklearn
@@ -276,6 +280,7 @@ class TreeBinningSklearn(Binning):
                  min_weight_fraction_leaf=0.,
                  min_impurity_decrease=0.,
                  boosted=None,
+                 uniform=False,
                  n_estimators=50,
                  learning_rate=1.0,
                  ensemble_select='best',
@@ -285,6 +290,13 @@ class TreeBinningSklearn(Binning):
             random_state = np.random.RandomState(random_state)
         self.random_state = random_state
         self.regression = regression
+        if self.regression and uniform:
+            warnings.warn(
+                'Uniform smapling is only supported for classifcation')
+            self.uniform = False
+        else:
+            self.uniform = uniform
+
         if regression:
             if old_sklean:
                 if min_impurity_decrease != 0.:
@@ -387,25 +399,20 @@ class TreeBinningSklearn(Binning):
             Sample weights. If None (default) and active boosting, the sample
             weights are initialized to 1 / n_samples.
 
-        uniform : boolean, optional (default=False)
-            Only valid for a classification tree. If True a uniform
-            distribution is sampled before the model is trained.
-
         Returns
         -------
         self : object
             Returns self.
         """
         super(TreeBinningSklearn, self).initialize()
-        if self.regression and uniform:
-            warnings.warn(
-                'Uniform smapling is only supported for classifcation')
-        elif uniform:
+        if self.uniform and not self.regression:
             mask = __sample_uniform__(y,
                                       sample_weight=sample_weight,
                                       random_state=self.random_state)
             y = y[mask]
             X = X[mask]
+            print(len(X))
+            print(np.bincount(y))
         if self.boosted is not None:
             if self.ensemble_select_.lower() not in ['best', 'last']:
                 raise ValueError(

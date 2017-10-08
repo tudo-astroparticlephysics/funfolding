@@ -138,11 +138,12 @@ class LLHSolutionMinimizer(Solution):
                             x0=self.x0,
                             bounds=self.bounds,
                             method='SLSQP',
-                            constraints=cons)
+                            constraints=cons,
+                            options={'maxiter': 10000})
         try:
             hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
             V_f_est = linalg.inv(hess_matrix)
-        except NotImplementedError:
+        except:
             V_f_est = None
         return solution, V_f_est
 
@@ -238,7 +239,7 @@ class LLHSolutionMCMC(Solution):
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,
                                      dim=self.model.dim_f,
-                                     lnpostfn=self.llh,#.evaluate_llh,
+                                     lnpostfn=self.llh,
                                      threads=self.n_threads)
 
     def __run_mcmc__(self, sampler, x0, n_steps):

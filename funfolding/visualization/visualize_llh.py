@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
+
 def plot_llh_slice(llh, best_fit, selected_bin=None, n_points=30):
     fig, [ax_grad, ax_hess] = plt.subplots(2, 1, figsize=(24, 18))
     if selected_bin is None:
@@ -63,83 +64,5 @@ def plot_llh_slice(llh, best_fit, selected_bin=None, n_points=30):
 
     ax_grad.set_xlabel('Events in Bin {}'.format(selected_bin))
     # ax_hess.set_ylabel(r'$\mathdefault{Gradient}_%d$' % selected_bin)
-    ax_grad.set_ylabel('Likelihood')
-    return fig
-
-
-def plot_llh_slice_H(llh, best_fit, bins=None, n_points=30):
-    fig, [ax_grad, ax_hess] = plt.subplots(2, 1, figsize=(24, 18))
-    if bins is None:
-        order = np.argsort(best_fit)
-        bin_j, bin_i = order[-2:]
-    else:
-        bin_i, bin_j = bins
-    points_i = np.linspace(0.9 * best_fit[bin_i],
-                           1.1 * best_fit[bin_i],
-                           n_points + 1)
-    points_j = np.linspace(0.9 * best_fit[bin_j],
-                           1.1 * best_fit[bin_j],
-                           n_points + 1)
-
-    gradient = np.zeros((len(best_fit), n_points, n_points))
-    hessian = np.zeros((len(best_fit), n_points, n_points, 2))
-
-    for i, p_i in enumerate(points_i):
-        best_fit[bin_i] = p_i
-        for j, p_j in enumerate(points_j):
-            best_fit[bin_j] = p_j
-            gradient[i] = llh.evaluate_gradient(best_fit)[bin_i]
-            hessian_values[i] = llh.evaluate_hessian(best_fit)[selected_bin,
-                                                               selected_bin]
-
-
-
-    if bin_i is None and bin_j is None:
-        bin_i, bin_j = highest
-
-
-    if selected_bin is None:
-        selected_bin = np.argmax(best_fit)
-    points_i = np.linspace(0.9 * best_fit[selected_bin],
-                         1.1 * best_fit[selected_bin],
-                         n_points+1)
-    llh_values = np.zeros_like(points)
-    gradient_values = np.zeros_like(points)
-    hessian_values = np.zeros_like(points)
-
-    fig, [ax_grad, ax_hess] = plt.subplots(2, 1, figsize=(24, 18))
-    diff = np.diff(points)[0] / 1.5
-    for i, p_i in enumerate(points):
-        best_fit[selected_bin] = p_i
-        llh_values[i] = llh.evaluate_llh(best_fit)
-        gradient_values[i] = llh.evaluate_gradient(best_fit)[selected_bin]
-        hessian_values[i] = llh.evaluate_hessian(best_fit)[selected_bin,
-                                                           selected_bin]
-    dx = np.ones_like(points) * diff
-    dx[gradient_values < 0] *= -1.
-    dy = gradient_values * diff
-    dy[gradient_values < 0] *= -1.
-
-    ax_grad.quiver(points,
-                   llh_values,
-                   dx,
-                   dy,
-                   angles='xy', scale_units='xy', scale=1.)
-
-    dx = np.ones_like(points) * diff
-    dx[gradient_values < 0] *= -1.
-    dy = hessian_values * diff
-    dy[gradient_values < 0] *= -1.
-    ax_hess.axhline(0., color='0.5', linestyle='--')
-    ax_hess.quiver(points,
-                   gradient_values,
-                   dx,
-                   dy,
-                   angles='xy', scale_units='xy', scale=1.,
-                   pivot='tip')
-    ax_hess.set_xlabel('Events in Bin {}'.format(selected_bin))
-
-    ax_grad.set_xlabel('Events in Bin {}'.format(selected_bin))
-    ax_hess.set_ylabel(r'$\mathdefault{Gradient}_%d$' % selected_bin)
     ax_grad.set_ylabel('Likelihood')
     return fig

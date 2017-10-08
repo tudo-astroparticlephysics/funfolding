@@ -3,17 +3,19 @@ import numpy as np
 from ..model import LinearModel, Model
 
 
-def create_C_thikonov(n_dims):
+def create_C_thikonov(n_dims, crop_beginning=False, crop_end=False):
     C = np.zeros((n_dims, n_dims))
-    C[0, 0] = -1
-    C[0, 1] = 1
+    if not crop_beginning:
+        C[0, 0] = -1
+        C[0, 1] = 1
     idx_N = n_dims - 1
     for i in range(1, idx_N):
         C[i, i] = -2.
         C[i, i - 1] = 1
         C[i, i + 1] = 1
-    C[idx_N, idx_N] = -1
-    C[idx_N, idx_N - 1] = 1
+    if not crop_end:
+        C[idx_N, idx_N] = -1
+        C[idx_N, idx_N - 1] = 1
     return C
 
 
@@ -78,7 +80,9 @@ class StandardLLHAlt(LLH):
 
     def initialize(self,
                    vec_g,
-                   model):
+                   model,
+                   crop_C_beginning=False,
+                   crop_C_end=False):
         super(StandardLLH, self).initialize()
         if not isinstance(model, Model):
             raise ValueError("'model' has to be of type Model!")
@@ -110,7 +114,10 @@ class StandardLLHAlt(LLH):
             if self._tau is not None:
                 if isinstance(self.C, str):
                     if self.C.lower() == 'thikonov' or self.C.lower() == '2':
-                        m_C = create_C_thikonov(model.dim_f)
+                        m_C = create_C_thikonov(
+                            model.dim_f,
+                            crop_end=crop_C_end,
+                            crop_beginning=crop_C_beginning)
                 elif isinstance(self.C, int):
                     if self.C == 2:
                         m_C = create_C_thikonov(model.dim_f)
@@ -233,7 +240,9 @@ class StandardLLH(LLH):
 
     def initialize(self,
                    vec_g,
-                   model):
+                   model,
+                   crop_C_beginning=False,
+                   crop_C_end=False):
         super(StandardLLH, self).initialize()
         if not isinstance(model, Model):
             raise ValueError("'model' has to be of type Model!")
@@ -265,7 +274,10 @@ class StandardLLH(LLH):
             if self._tau is not None:
                 if isinstance(self.C, str):
                     if self.C.lower() == 'thikonov' or self.C.lower() == '2':
-                        m_C = create_C_thikonov(model.dim_f)
+                        m_C = create_C_thikonov(
+                            model.dim_f,
+                            crop_end=crop_C_end,
+                            crop_beginning=crop_C_beginning)
                 elif isinstance(self.C, int):
                     if self.C == 2:
                         m_C = create_C_thikonov(model.dim_f)
@@ -337,7 +349,7 @@ class StandardLLH(LLH):
         if self._tau is not None:
             if self.log_f_reg:
                 pre = np.dot(np.dot(np.diag(f_reg + 1), self._C),
-                                  np.diag(f_reg + 1)) / np.log(10)**2
+                             np.diag(f_reg + 1)) / np.log(10)**2
                 ln_f_used = np.log((f_reg + 1) * self.vec_acceptance)
                 pre_diag_1 = np.dot(pre, np.diag(ln_f_used))
                 pre_diag_2 = np.dot(np.diag(ln_f_used), pre)
@@ -346,9 +358,9 @@ class StandardLLH(LLH):
                     for j in range(i + 1):
                         r = pre[i, j] + pre[j, i]
                         if i == j:
-                             r += np.sum(pre_diag_1, axis=1)
-                             r += np.sum(pre_diag_2, axis=1)
-                             reg_part[i, j]
+                            r += np.sum(pre_diag_1, axis=1)
+                            r += np.sum(pre_diag_2, axis=1)
+                            reg_part[i, j]
                         else:
                             reg_part[i, j] = r
                             reg_part[j, i] = r
@@ -361,7 +373,6 @@ class StandardLLH(LLH):
 
     def evaluate_neg_hessian(self, f):
         return self.evaluate_hessian(f) * -1.
-
 
 
 class LLHThikonovForLoops:
