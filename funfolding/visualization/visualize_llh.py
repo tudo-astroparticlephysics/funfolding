@@ -32,7 +32,6 @@ def plot_llh_slice(llh, best_fit, selected_bin=None, n_points=30):
                    dy,
                    angles='xy', scale_units='xy', scale=1.)
 
-
     for i in range(len(best_fit)):
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         gradient_values_i = gradient_values[:, i]
@@ -40,7 +39,7 @@ def plot_llh_slice(llh, best_fit, selected_bin=None, n_points=30):
         dx = np.ones_like(points) * diff
         dx[gradient_values_i < 0] *= -1.
         dy = hessian_values[:, i] * diff
-        dy[gradient_values_i  < 0] *= -1.
+        dy[gradient_values_i < 0] *= -1.
         ax.quiver(points,
                   gradient_values_i,
                   dy,
