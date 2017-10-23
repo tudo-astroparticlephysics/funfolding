@@ -11,6 +11,7 @@ def plot_binning(ax,
                  binning,
                  X,
                  sample_weight=None,
+                 cb_label='Number of Events',
                  cmap='viridis',
                  linecolor='0.5',
                  linewidth=1.,
@@ -88,10 +89,11 @@ def plot_binning(ax,
     ax.set_ylim(binning.edges[1][0], binning.edges[1][-1])
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="8%", pad=0.05)
-    matplotlib.colorbar.ColorbarBase(cax,
+    cb = matplotlib.colorbar.ColorbarBase(cax,
                                      cmap=cmap,
                                      norm=norm)
-
+    if cb_label is not None:
+        cb.set_label(cb_label)
 
 def mark_bin(ax, binning, i_label, color='r', linewidth=1., zorder=6):
     t_labels = binning.i_to_t[i_label]

@@ -1,8 +1,10 @@
 import time
 
 import numpy as np
-
+from sklearn.metrics import log_loss
 from concurrent.futures import ProcessPoolExecutor
+
+
 
 import funfolding as ff
 
@@ -371,13 +373,16 @@ def recursive_feature_selection_condition_pulls_map(X,
                                                     n_jobs=1,
                                                     n_tasks_per_job=1,
                                                     X_merge=None,
+                                                    binning_y=None,
+                                                    log_loss=False,
                                                     merge_kw={},
+                                                    return_full=False,
                                                     random_state=None):
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
     order = []
-    final_condition_mean = np.zeros(X.shape[1])
-    final_condition_std = np.zeros(X.shape[1])
+    final_criteria_mean = np.zeros(X.shape[1])
+    final_criteria_std = np.zeros(X.shape[1])
     features = range(X.shape[1])
     unused = [i for i in features if i not in order]
 
@@ -385,10 +390,14 @@ def recursive_feature_selection_condition_pulls_map(X,
     work_on_task.y = y
     work_on_task.X_merge = X_merge
     work_on_task.merge_kw = merge_kw
+    work_on_task.binning_y = binning_y
+    work_on_task.log_loss = log_loss
+
+    full_criteria = []
 
     while len(unused) > 0:
         print(order)
-        condition = np.ones((len(unused), n_folds)) * np.inf
+        criteria = np.ones((len(unused), n_folds)) * np.inf
         results = []
         feature_sets = []
         idx = []
@@ -405,55 +414,68 @@ def recursive_feature_selection_condition_pulls_map(X,
             n_events_binning=n_events_binning,
             random_state=random_state)
 
-        with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-
-            def future_callback(future):
-                future_callback.finished += 1
-                if not future.cancelled():
-                    results.append(future.result())
-                else:
-                    raise RuntimeError('Subprocess crashed!')
-                future_callback.running -= 1
-
-            future_callback.running = 0
-            future_callback.finished = 0
-
+        if n_jobs < 2:
             for i, indices in enumerate(pull_mode_iterator):
                 task_params_i = (idx[i],
                                  feature_sets[i],
                                  indices,
                                  binning.copy())
-                while True:
-                    if future_callback.running < n_jobs:
-                        break
+                results.append(work_on_task(task_params=task_params_i))
+        else:
+            with ProcessPoolExecutor(max_workers=n_jobs) as executor:
+                def future_callback(future):
+                    future_callback.finished += 1
+                    if not future.cancelled():
+                        results.append(future.result())
                     else:
-                        time.sleep(1)
-                future = executor.submit(
-                    work_on_task,
-                    task_params=task_params_i)
-                future.add_done_callback(future_callback)
-                future_callback.running += 1
+                        raise RuntimeError('Subprocess crashed!')
+                    future_callback.running -= 1
 
-        for idx, condition_i in results:
-            condition[idx[0], idx[1]] = condition_i
-        mean_condition = np.mean(condition, axis=1)
-        std_condition = np.std(condition, axis=1)
-        idx_best = np.argmax(mean_condition)
+                future_callback.running = 0
+                future_callback.finished = 0
+
+                for i, indices in enumerate(pull_mode_iterator):
+                    task_params_i = (idx[i],
+                                     feature_sets[i],
+                                     indices,
+                                     binning.copy())
+                    while True:
+                        if future_callback.running < n_jobs:
+                            break
+                        else:
+                            time.sleep(1)
+                    future = executor.submit(
+                        work_on_task,
+                        task_params=task_params_i)
+                    future.add_done_callback(future_callback)
+                    future_callback.running += 1
+
+        for idx, criteria_i in results:
+            criteria[idx[0], idx[1]] = criteria_i
+        full_criteria.append(criteria)
+        mean_criteria = np.mean(criteria, axis=1)
+        std_criteria = np.std(criteria, axis=1)
+        idx_best = np.argmin(mean_criteria)
         selected_feature = unused[idx_best]
-        final_condition_mean[len(order)] = mean_condition[idx_best]
-        final_condition_std[len(order)] = std_condition[idx_best]
+        final_criteria_mean[len(order)] = mean_criteria[idx_best]
+        final_criteria_std[len(order)] = std_criteria[idx_best]
         order.append(selected_feature)
         unused.remove(selected_feature)
     if backwards:
         order = order[::-1]
-        final_condition_mean = final_condition_mean[::-1]
-        final_condition_std = final_condition_std[::-1]
+        final_criteria_mean = final_criteria_mean[::-1]
+        final_criteria_std = final_criteria_std[::-1]
 
     work_on_task.X = None
     work_on_task.y = None
     work_on_task.X_merge = None
     work_on_task.merge_kw = None
-    return order, final_condition_mean, final_condition_std
+    work_on_task.binning_y = None
+    work_on_task.log_loss = False
+    if return_full:
+        return order, final_criteria_mean, final_criteria_std, full_criteria
+    else:
+        return order, final_criteria_mean, final_criteria_std
 
 
 def work_on_task(task_params):
@@ -464,15 +486,35 @@ def work_on_task(task_params):
     X_train = work_on_task.X[binning_idx, :][:, feature_set]
     y_train = work_on_task.y[binning_idx]
     X_test = work_on_task.X[A_idx, :][:, feature_set]
-    y_test = work_on_task.y[A_idx]
     binning_i.fit(X_train, y_train)
-    if work_on_task.X_merge is not None:
-        X_merge_task = work_on_task.X_merge[:, feature_set]
-        binning_i.merge(X_merge_task, **work_on_task.merge_kw_)
-    binned_g_validation = binning_i.digitize(X_test)
-    model = ff.model.LinearModel()
-    model.initialize(digitized_obs=binned_g_validation,
-                     digitized_truth=y_test)
-    singular_values = model.evaluate_condition()
+    if work_on_task.log_loss:
+        if work_on_task.binning_y is not None:
+            raise ValueError('Regression not valid for log_loss')
+        else:
+            y_test = work_on_task.y[A_idx]
+        predicted_probas = binning_i.predict_proba(X_test)
+        loss = log_loss(y_test, predicted_probas)
+        return idx, loss
+    else:
+        if work_on_task.binning_y is not None:
+            y_test = np.digitize(work_on_task.y[A_idx],
+                                 bins=work_on_task.binning_y)
+        else:
+            y_test = work_on_task.y[A_idx]
 
-    return idx, max(singular_values) / min(singular_values)
+        if work_on_task.X_merge is not None:
+            X_merge_task = work_on_task.X_merge[:, feature_set]
+            binning_i.merge(X_merge_task, **work_on_task.merge_kw_)
+        binned_g_validation = binning_i.digitize(X_test)
+        model = ff.model.LinearModel()
+        model.initialize(digitized_obs=binned_g_validation,
+                         digitized_truth=y_test)
+        singular_values = model.evaluate_condition(normalize=False)
+        return idx, max(singular_values) / min(singular_values)
+
+
+
+
+
+
+

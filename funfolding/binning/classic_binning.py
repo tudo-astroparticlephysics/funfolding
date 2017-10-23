@@ -65,7 +65,7 @@ class ClassicBinning(Binning):
         self.create_conversion_dict()
         self.n_bins = len(self.t_to_i.keys())
 
-    def digitize(self, X, sample_weight=None, right=False):
+    def digitize(self, X, right=False):
         super(ClassicBinning, self).digitize()
         tup_label = np.zeros((len(X), self.n_dims), dtype=int)
         for dim_i in range(self.n_dims):
@@ -203,6 +203,7 @@ class ClassicBinning(Binning):
             clone = self.copy()
             return clone.merge(X=X,
                                min_samples=min_samples,
+                               max_bins=max_bins,
                                sample_weight=sample_weight,
                                y=y,
                                right=right,

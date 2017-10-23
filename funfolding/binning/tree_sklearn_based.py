@@ -36,6 +36,7 @@ def __sample_uniform__(y, sample_weight=None, random_state=None):
     mask: list of bools
         A boolean mask for y. True for samples that should be kept.
     """
+    print('sampling uniform')
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
 
@@ -375,6 +376,7 @@ class TreeBinningSklearn(Binning):
         self.ensemble_select_ = ensemble_select.lower()
         self.leaf_idx_mapping_ = None
         self.n_bins = None
+        self.n_dims = None
         self.merged = False
 
     def initialize(self,
@@ -405,14 +407,13 @@ class TreeBinningSklearn(Binning):
             Returns self.
         """
         super(TreeBinningSklearn, self).initialize()
+        self.n_dims = X.shape[1]
         if self.uniform and not self.regression:
             mask = __sample_uniform__(y,
                                       sample_weight=sample_weight,
                                       random_state=self.random_state)
             y = y[mask]
             X = X[mask]
-            print(len(X))
-            print(np.bincount(y))
         if self.boosted is not None:
             if self.ensemble_select_.lower() not in ['best', 'last']:
                 raise ValueError(
@@ -549,6 +550,7 @@ class TreeBinningSklearn(Binning):
         """
         clone = TreeBinningSklearn(random_state=self.random_state)
         clone.tree = copy.deepcopy(self.tree)
+        clone.uniform = bool(self.uniform)
         return clone
 
     def merge(self, X, threshold, inplace=True):

@@ -39,6 +39,7 @@ setup(
         'numpy',
         'scikit-learn>=0.18.1',
         'emcee',
+        'pymc3',
         'scipy',
         'futures',
         'matplotlib',

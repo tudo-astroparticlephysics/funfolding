@@ -8,9 +8,13 @@ import matplotlib
 matplotlib.use('Agg')
 
 from matplotlib import pyplot as plt
+import matplotlib.colors as colors
+
 
 from funfolding import binning, model, solution
-from funfolding.visualization.visualize_classic_binning import plot_binning
+from funfolding.visualization import visualize_classic_binning
+from funfolding.visualization import visualize_tree_binning
+from funfolding.visualization import visualize_model
 from funfolding.visualization.visualize_llh import plot_llh_slice
 
 import corner
@@ -79,6 +83,7 @@ if __name__ == '__main__':
     obs_array = df.get(['log10(ConcCore)', 'log10(E_RF)']).values
 
     X_A = obs_array[idx_A]
+    X_binning = obs_array[idx_binning]
     X_test = obs_array[idx_test]
 
     classic_binning = binning.ClassicBinning(
@@ -88,24 +93,58 @@ if __name__ == '__main__':
     classic_binning.fit(X_A)
 
     fig, ax = plt.subplots()
-    plot_binning(ax,
+    visualize_classic_binning.plot_binning(ax,
                  classic_binning,
                  X_A,
                  log_c=False,
                  cmap='viridis')
     fig.savefig('05_fact_example_original_binning.png')
 
-    closest = classic_binning.merge(X_test,
-                                    min_samples=10,
-                                    max_bins=None,
+
+
+
+    tree_binning_2d = binning.TreeBinningSklearn(
+        regression=False,
+        min_samples_leaf=int(min_samples_leaf * 10.),
+        random_state=random_state)
+
+    tree_binning_2d.fit(X_binning,
+                     binned_E_binning,
+                     uniform=False)
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    visualize_tree_binning.plot_binning(ax,
+                                        tree_binning_2d,
+                                        limits=[-0.7,
+                                                -0.2,
+                                                2.7,
+                                                4.2],
+                                        X=X_A,
+                                        linecolor='k',
+                                        linewidth='0.3',
+                                        log_c=False,
+                                        as_hexbins=True,
+                                        hex_kwargs={'rasterized': True,
+                                                    'gridsize': 50},
+                                        cmap='viridis')
+    ax.set_ylabel('log10(Energy Estimator [GeV])')
+    ax.set_xlabel('log10(Concentration [a.u.])')
+    fig.savefig('05_fact_example_original_tree_binning.png', dpi=300)
+
+
+
+
+    closest = classic_binning.merge(X_binning,
+                                    min_samples=int(min_samples_leaf * 10.),
                                     mode='closest')
     fig, ax = plt.subplots()
-    plot_binning(ax,
+    visualize_classic_binning.plot_binning(ax,
                  closest,
                  X_A,
                  log_c=False,
                  cmap='viridis')
     fig.savefig('05_fact_example_original_binning_closest.png')
+
 
     unmerged_model = model.LinearModel()
     binned_g_A = classic_binning.digitize(X_A)
@@ -132,6 +171,17 @@ if __name__ == '__main__':
     binned_g_A = np.digitize(X_A[:, 1], binning_E_obs)
     single_obs_model_more_bins.initialize(digitized_obs=binned_g_A,
                                           digitized_truth=binned_E_A)
+    fig, ax = plt.subplots(figsize=(2, 6))
+    visualize_model.plot_A(ax, merged_model)
+    fig.savefig('05_A_single_obs_model.png', dpi=300)
+
+    binned_g_A = tree_binning_2d.digitize(X_A)
+    tree_2d_model = model.LinearModel()
+    tree_2d_model.initialize(digitized_obs=binned_g_A,
+                            digitized_truth=binned_E_A)
+    fig, ax = plt.subplots(figsize=(2, 6))
+    visualize_model.plot_A(ax, tree_2d_model)
+    fig.savefig('05_A_tree_model.png', dpi=300)
 
     tree_obs = ["log10(E_RF)",
                 "log10(Size)",
@@ -173,6 +223,9 @@ if __name__ == '__main__':
     tree_model_uniform = model.LinearModel()
     tree_model_uniform.initialize(digitized_obs=binned_g_A,
                                   digitized_truth=binned_E_A)
+    fig, ax = plt.subplots(figsize=(2, 6))
+    visualize_model.plot_A(ax, tree_model_uniform)
+    fig.savefig('05_A_tree_model_full_uniform.png', dpi=300)
 
     tree_binning = binning.TreeBinningSklearn(
         regression=False,
@@ -188,6 +241,9 @@ if __name__ == '__main__':
     tree_model = model.LinearModel()
     tree_model.initialize(digitized_obs=binned_g_A,
                           digitized_truth=binned_E_A)
+    visualize_model.plot_A(ax, tree_model)
+    fig.savefig('05_A_tree_model_full.png', dpi=300)
+
 
     fig, ax = plt.subplots()
     svd_values = unmerged_model.evaluate_condition()
@@ -206,20 +262,28 @@ if __name__ == '__main__':
             weights=svd_values,
             histtype='step',
             label='2 Observables (Merged; {} Bins)'.format(closest.n_bins))
+#
+#    svd_values = single_obs_model.evaluate_condition()
+#    ax.hist(bin_centers,
+#            bins=bin_edges,
+#            weights=svd_values,
+#            histtype='step',
+#            label='Single Observable ({} Bins)'.format(closest.n_bins))
+#
+#    svd_values = single_obs_model_more_bins.evaluate_condition()
+#    ax.hist(bin_centers,
+#            bins=bin_edges,
+#            weights=svd_values,
+#            histtype='step',
+#            label='Single Observable ({} Bins)'.format(closest.n_bins))
 
-    svd_values = single_obs_model.evaluate_condition()
+    svd_values = tree_2d_model.evaluate_condition()
     ax.hist(bin_centers,
             bins=bin_edges,
             weights=svd_values,
             histtype='step',
-            label='Single Observable ({} Bins)'.format(closest.n_bins))
+            label='Tree Based 2D ({} Bins)'.format(tree_binning.n_bins))
 
-    svd_values = single_obs_model_more_bins.evaluate_condition()
-    ax.hist(bin_centers,
-            bins=bin_edges,
-            weights=svd_values,
-            histtype='step',
-            label='Single Observable ({} Bins)'.format(closest.n_bins))
 
     svd_values = tree_model.evaluate_condition()
     ax.hist(bin_centers,
@@ -227,17 +291,19 @@ if __name__ == '__main__':
             weights=svd_values,
             histtype='step',
             label='Tree Based ({} Bins)'.format(tree_binning.n_bins))
-
+#
     svd_values = tree_model_uniform.evaluate_condition()
     ax.hist(bin_centers,
             bins=bin_edges,
-            weights=svd_values,
+             weights=svd_values,
             histtype='step',
             label='Tree Based ({} Bins; Uniform)'.format(tree_binning.n_bins))
 
     plt.legend(loc='lower left')
     ax.set_yscale("log", nonposy='clip')
     plt.savefig('05_condition.png')
+
+    exit()
 
     binned_g_test = tree_binning.digitize(X_tree_test)
     vec_g, vec_f = tree_model.generate_vectors(binned_g_test,

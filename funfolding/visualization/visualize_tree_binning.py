@@ -180,12 +180,16 @@ class TreeCrawlerPlotting:
     def plot(self,
              ax,
              limits=None,
-             counted=None,
+             data=None,
+             cb_label='Number Events',
+             sample_weight=None,
              cmap='viridis',
              linecolor='w',
              linewidth=2.,
              log_c=False,
-             zorder=200):
+             as_hexbins=False,
+             hex_kwargs={},
+             zorder=5):
         if limits is None:
             limits = [np.inf, -np.inf, np.inf, -np.inf]
             for i, leaf_i in enumerate(self.node_indices):
@@ -198,7 +202,6 @@ class TreeCrawlerPlotting:
                     limits[2] = min(leaf.bottom.threshold, limits[2])
                 if leaf.top is not None:
                     limits[3] = max(leaf.top.threshold, limits[3])
-        print(limits)
         for i, leaf_i in enumerate(self.node_indices):
             leaf = self.leaf_list[self.leaf_idents.index(leaf_i)]
             leaf.__plot_edges__(ax, limits,
@@ -208,13 +211,25 @@ class TreeCrawlerPlotting:
                                 zorder=zorder)
         ax.set_xlim(limits[0], limits[1])
         ax.set_ylim(limits[2], limits[3])
-        if counted is not None:
-            self.fill_bins(ax, counted,
-                           cmap=cmap,
-                           log_c=log_c,
-                           zorder=zorder)
+        if data is not None:
+            if as_hexbins:
+                cb = self.plot_hexbins(ax,
+                                  data,
+                                  extent=limits,
+                                  sample_weight=sample_weight,
+                                  cmap=cmap,
+                                  log_c=log_c,
+                                  hex_kwargs=hex_kwargs,
+                                  zorder=zorder-1)
+            else:
+                cb = self.fill_bins(ax, data,
+                               cmap=cmap,
+                               log_c=log_c,
+                               zorder=zorder)
+        if cb_label is not None:
+            cb.set_label(cb_label)
 
-    def fill_bins(self, ax, counted,
+    def fill_bins(self, ax, data,
                   cmap='viridis',
                   c_min=None,
                   c_max=None,
@@ -222,14 +237,14 @@ class TreeCrawlerPlotting:
                   zorder=199):
         cmap = matplotlib.cm.get_cmap(cmap)
         if c_min is None:
-            c_min = np.min(counted)
+            c_min = np.min(data)
         if c_max is None:
-            c_max = np.max(counted)
+            c_max = np.max(data)
         if log_c:
             norm = colors.LogNorm(vmin=c_min, vmax=c_max)
         else:
             norm = colors.Normalize(vmin=c_min, vmax=c_max)
-        colz = cmap(norm(counted))
+        colz = cmap(norm(data))
         for i, leaf_i in enumerate(self.node_indices):
             leaf = self.leaf_list[self.leaf_idents.index(leaf_i)]
             color = colz[i]
@@ -237,32 +252,78 @@ class TreeCrawlerPlotting:
 
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="8%", pad=0.05)
-        matplotlib.colorbar.ColorbarBase(cax,
+        cb = matplotlib.colorbar.ColorbarBase(cax,
                                          cmap=cmap,
                                          norm=norm)
+        return cb
 
+    def plot_hexbins(self,
+                     ax,
+                     data,
+                     extent,
+                     sample_weight=None,
+                     cmap='viridis',
+                     log_c=None,
+                     hex_kwargs={},
+                     zorder=4):
+        if log_c:
+            norm = colors.LogNorm()
+        else:
+            norm = colors.Normalize()
+
+        if sample_weight is None:
+            sample_weight = np.ones_like(data[:, 0])
+        ax.hexbin(
+            data[:, 0],
+            data[:, 1],
+            C=sample_weight,
+            extent=extent,
+            cmap=cmap,
+            reduce_C_function=np.sum,
+            norm=norm,
+            zorder=zorder,
+            **hex_kwargs)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="8%", pad=0.05)
+        cb = matplotlib.colorbar.ColorbarBase(cax,
+                                         cmap=cmap,
+                                         norm=norm)
+        return cb
 
 def plot_binning(ax,
                  binning,
                  X=None,
                  limits=None,
                  sample_weight=None,
+                 cb_label='Number of Events',
                  cmap='viridis',
                  linecolor='0.5',
                  linewidth=1.,
                  log_c=False,
+                 as_hexbins=True,
+                 hex_kwargs={'rasterized': True},
                  zorder=5):
     if binning.n_dims != 2:
         raise binning.InvalidDimension
     if X is not None:
-        counted = binning.histogram(X, sample_weight=sample_weight)
+        if as_hexbins:
+            data = X
+            sample_weight = sample_weight
+        else:
+            data = binning.histogram(X, sample_weight=sample_weight)
+            sample_weight = None
+    else:
+        data = None
     tree_crawler = TreeCrawlerPlotting(binning.tree)
     tree_crawler.start_crawl()
     tree_crawler.plot(ax=ax,
                       limits=limits,
-                      counted=counted,
+                      data=data,
                       cmap=cmap,
+                      cb_label=cb_label,
                       linecolor=linecolor,
                       linewidth=linewidth,
                       log_c=log_c,
+                      as_hexbins=as_hexbins,
+                      hex_kwargs=hex_kwargs,
                       zorder=zorder)
