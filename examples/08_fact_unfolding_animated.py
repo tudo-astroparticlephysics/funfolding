@@ -217,8 +217,6 @@ if __name__ == '__main__':
             yield data_dict
         data_dict = {}
         data_dict['finished'] = False
-        corner_fig.savefig('00_gradient_descent.png', figsize=(8, 8))
-        exit()
         yield data_dict
 
 
