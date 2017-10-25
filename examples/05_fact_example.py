@@ -295,7 +295,7 @@ if __name__ == '__main__':
     svd_values = tree_model_uniform.evaluate_condition()
     ax.hist(bin_centers,
             bins=bin_edges,
-             weights=svd_values,
+            ooweights=svd_values,
             histtype='step',
             label='Tree Based ({} Bins; Uniform)'.format(tree_binning.n_bins))
 

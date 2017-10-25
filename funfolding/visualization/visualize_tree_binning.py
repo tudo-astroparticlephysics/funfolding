@@ -9,6 +9,41 @@ import matplotlib
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
+
+def plot_hexbins(ax,
+                 data,
+                 extent,
+                 sample_weight=None,
+                 cmap='viridis',
+                 log_c=None,
+                 hex_kwargs={},
+                 zorder=4):
+    if log_c:
+        norm = colors.LogNorm()
+    else:
+        norm = colors.Normalize()
+
+    if sample_weight is None:
+        sample_weight = np.ones_like(data[:, 0])
+    ax.hexbin(
+        data[:, 0],
+        data[:, 1],
+        C=sample_weight,
+        extent=extent,
+        cmap=cmap,
+        reduce_C_function=np.sum,
+        norm=norm,
+        zorder=zorder,
+        **hex_kwargs)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="8%", pad=0.05)
+    cb = matplotlib.colorbar.ColorbarBase(cax,
+                                          cmap=cmap,
+                                          norm=norm)
+    return cb
+
+
+
 class Cut:
     def __init__(self, threshold, feature, comparison):
         self.ignore = False
@@ -213,7 +248,7 @@ class TreeCrawlerPlotting:
         ax.set_ylim(limits[2], limits[3])
         if data is not None:
             if as_hexbins:
-                cb = self.plot_hexbins(ax,
+                cb = plot_hexbins(ax,
                                   data,
                                   extent=limits,
                                   sample_weight=sample_weight,
@@ -228,6 +263,7 @@ class TreeCrawlerPlotting:
                                zorder=zorder)
         if cb_label is not None:
             cb.set_label(cb_label)
+        return limits
 
     def fill_bins(self, ax, data,
                   cmap='viridis',
@@ -257,38 +293,7 @@ class TreeCrawlerPlotting:
                                          norm=norm)
         return cb
 
-    def plot_hexbins(self,
-                     ax,
-                     data,
-                     extent,
-                     sample_weight=None,
-                     cmap='viridis',
-                     log_c=None,
-                     hex_kwargs={},
-                     zorder=4):
-        if log_c:
-            norm = colors.LogNorm()
-        else:
-            norm = colors.Normalize()
 
-        if sample_weight is None:
-            sample_weight = np.ones_like(data[:, 0])
-        ax.hexbin(
-            data[:, 0],
-            data[:, 1],
-            C=sample_weight,
-            extent=extent,
-            cmap=cmap,
-            reduce_C_function=np.sum,
-            norm=norm,
-            zorder=zorder,
-            **hex_kwargs)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="8%", pad=0.05)
-        cb = matplotlib.colorbar.ColorbarBase(cax,
-                                         cmap=cmap,
-                                         norm=norm)
-        return cb
 
 def plot_binning(ax,
                  binning,
@@ -316,7 +321,7 @@ def plot_binning(ax,
         data = None
     tree_crawler = TreeCrawlerPlotting(binning.tree)
     tree_crawler.start_crawl()
-    tree_crawler.plot(ax=ax,
+    limits = tree_crawler.plot(ax=ax,
                       limits=limits,
                       data=data,
                       cmap=cmap,
@@ -327,3 +332,4 @@ def plot_binning(ax,
                       as_hexbins=as_hexbins,
                       hex_kwargs=hex_kwargs,
                       zorder=zorder)
+    return limits
