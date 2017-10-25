@@ -1,5 +1,7 @@
 import numpy as np
+import matplotlib
 
+matplotlib.use('Agg')
 from funfolding.pipeline import split_test_unfolding
 
 

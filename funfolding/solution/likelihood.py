@@ -1,6 +1,8 @@
 import numpy as np
+import pymc3 as pm
 
 from ..model import LinearModel, Model
+import theano
 
 
 def create_C_thikonov(n_dims, crop_beginning=False, crop_end=False):
@@ -306,6 +308,48 @@ class StandardLLH(LLH):
         else:
             reg_part = 0
         return poisson_part - reg_part
+
+    def create_pymc_model(self, x0=None):
+        super(StandardLLH, self).evaluate_llh()
+        model = pm.Model()
+
+        if x0 is None:
+            x0 = np.sum(self.vec_g) / self.model.dim_f
+            x0 = np.ones(self.model.dim_f, dtype=float) * x0
+
+        with model:
+            A = theano.shared(self.model.A)
+            vec_g = theano.shared(self.vec_g)
+            f = pm.Uniform('f',
+                           testval=x0,
+                           lower=0,
+                           upper=np.sum(self.vec_g),
+                           shape=self.model.dim_f)
+            g_est = theano.tensor.dot(A, f)
+            poisson_part = pm.Poisson('poisson_part_llh',
+                                      mu=g_est,
+                                      observed=vec_g)
+            if self.tau > 0:
+                vec_acceptance = theano.shared(self.vec_acceptance)
+                _C = theano.shared(self._C)
+                if self.log_f_reg:
+                    def calc_reg_part(f_reg):
+                        f_reg_used = theano.tensor.log10(
+                            (f_reg + 1) * vec_acceptance)
+                        return 0.5 * theano.tensor.dot(
+                            theano.tensor.dot(f_reg_used.T, _C),
+                            f_reg_used)
+                else:
+                    def calc_reg_part(f_reg):
+                        return 0.5 * theano.tensor.dot(
+                            theano.tensor.dot(f_reg.T, _C),
+                            f_reg)
+                reg_part = pm.Deterministic('reg_part', calc_reg_part(f))
+            else:
+                reg_part = 0.
+            pm.Deterministic('logp',
+                             theano.tensor.sum(poisson_part) - reg_part)
+        return model
 
     def evaluate_neg_llh(self, f):
         return self.evaluate_llh(f) * -1.

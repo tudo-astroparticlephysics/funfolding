@@ -29,7 +29,6 @@ if __name__ == '__main__':
     logging.info('========================================================')
     logging.info('Loading Data')
 
-
     random_state = np.random.RandomState(random_seed)
 
     if not os.path.isfile('fact_simulations.hdf'):
