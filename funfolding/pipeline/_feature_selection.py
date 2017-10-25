@@ -4,8 +4,6 @@ import numpy as np
 from sklearn.metrics import log_loss
 from concurrent.futures import ProcessPoolExecutor
 
-
-
 import funfolding as ff
 
 
@@ -511,10 +509,3 @@ def work_on_task(task_params):
                          digitized_truth=y_test)
         singular_values = model.evaluate_condition(normalize=False)
         return idx, max(singular_values) / min(singular_values)
-
-
-
-
-
-
-

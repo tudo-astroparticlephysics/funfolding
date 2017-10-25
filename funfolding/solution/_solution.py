@@ -144,7 +144,7 @@ class LLHSolutionMinimizer(Solution):
         try:
             hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
             V_f_est = linalg.inv(hess_matrix)
-        except:
+        except NotImplementedError:
             V_f_est = None
         return solution, V_f_est
 
@@ -349,8 +349,6 @@ def __effective_n_idx__(idx, x):
     return idx, effective_n(x)
 
 
-
-
 class LLHSolutionPyMC(Solution):
     name = 'LLHSolutionMCMC'
     status_need_for_fit = 1
@@ -525,8 +523,3 @@ class LLHSolutionPyMC(Solution):
             return n_eff
         else:
             return effective_n(sample)
-
-
-def __effective_n_idx__(idx, x):
-    return idx, effective_n(x)
-

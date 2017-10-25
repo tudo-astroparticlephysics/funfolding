@@ -4,6 +4,7 @@ import pymc3 as pm
 from ..model import LinearModel, Model
 import theano
 
+
 def create_C_thikonov(n_dims, crop_beginning=False, crop_end=False):
     C = np.zeros((n_dims, n_dims))
     if not crop_beginning:
@@ -333,23 +334,22 @@ class StandardLLH(LLH):
                 _C = theano.shared(self._C)
                 if self.log_f_reg:
                     def calc_reg_part(f_reg):
-                         f_reg_used = theano.tensor.log10(
+                        f_reg_used = theano.tensor.log10(
                             (f_reg + 1) * vec_acceptance)
-                         return 0.5 * theano.tensor.dot(
+                        return 0.5 * theano.tensor.dot(
                             theano.tensor.dot(f_reg_used.T, _C),
                             f_reg_used)
                 else:
                     def calc_reg_part(f_reg):
-                         return 0.5 * theano.tensor.dot(
+                        return 0.5 * theano.tensor.dot(
                             theano.tensor.dot(f_reg.T, _C),
                             f_reg)
                 reg_part = pm.Deterministic('reg_part', calc_reg_part(f))
             else:
                 reg_part = 0.
-            logp = pm.Deterministic('logp',
-                theano.tensor.sum(poisson_part) - reg_part)
+            pm.Deterministic('logp',
+                             theano.tensor.sum(poisson_part) - reg_part)
         return model
-
 
     def evaluate_neg_llh(self, f):
         return self.evaluate_llh(f) * -1.

@@ -9,7 +9,6 @@ import matplotlib
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
-
 def plot_hexbins(ax,
                  data,
                  extent,
@@ -41,7 +40,6 @@ def plot_hexbins(ax,
                                           cmap=cmap,
                                           norm=norm)
     return cb
-
 
 
 class Cut:
@@ -255,12 +253,12 @@ class TreeCrawlerPlotting:
                                   cmap=cmap,
                                   log_c=log_c,
                                   hex_kwargs=hex_kwargs,
-                                  zorder=zorder-1)
+                                  zorder=zorder - 1)
             else:
                 cb = self.fill_bins(ax, data,
-                               cmap=cmap,
-                               log_c=log_c,
-                               zorder=zorder)
+                                    cmap=cmap,
+                                    log_c=log_c,
+                                    zorder=zorder)
         if cb_label is not None:
             cb.set_label(cb_label)
         return limits
@@ -284,15 +282,14 @@ class TreeCrawlerPlotting:
         for i, leaf_i in enumerate(self.node_indices):
             leaf = self.leaf_list[self.leaf_idents.index(leaf_i)]
             color = colz[i]
-            leaf.__fill__(ax, color, zorder=zorder-1)
+            leaf.__fill__(ax, color, zorder=zorder - 1)
 
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="8%", pad=0.05)
         cb = matplotlib.colorbar.ColorbarBase(cax,
-                                         cmap=cmap,
-                                         norm=norm)
+                                              cmap=cmap,
+                                              norm=norm)
         return cb
-
 
 
 def plot_binning(ax,
@@ -322,14 +319,14 @@ def plot_binning(ax,
     tree_crawler = TreeCrawlerPlotting(binning.tree)
     tree_crawler.start_crawl()
     limits = tree_crawler.plot(ax=ax,
-                      limits=limits,
-                      data=data,
-                      cmap=cmap,
-                      cb_label=cb_label,
-                      linecolor=linecolor,
-                      linewidth=linewidth,
-                      log_c=log_c,
-                      as_hexbins=as_hexbins,
-                      hex_kwargs=hex_kwargs,
-                      zorder=zorder)
+                               limits=limits,
+                               data=data,
+                               cmap=cmap,
+                               cb_label=cb_label,
+                               linecolor=linecolor,
+                               linewidth=linewidth,
+                               log_c=log_c,
+                               as_hexbins=as_hexbins,
+                               hex_kwargs=hex_kwargs,
+                               zorder=zorder)
     return limits
