@@ -8,4 +8,3 @@ __all__ = ('visualize_classic_binning',
            'visualize_llh',
            'visualize_tree_binning',
            'visualize_model')
-

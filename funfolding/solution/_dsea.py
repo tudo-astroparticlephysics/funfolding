@@ -1,6 +1,6 @@
 import numpy as np
 
-from ._solution import Solution, LLHSolutionMinimizer
+from ._solution import Solution
 from sklearn.naive_bayes import GaussianNB
 
 

@@ -12,4 +12,3 @@ __all__ = ('split_test_unfolding',
            'recursive_feature_selection_condition_pulls',
            'recursive_feature_selection_condition_pulls_map',
            'recursive_feature_selection_condition_validation')
-
