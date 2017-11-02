@@ -3,8 +3,8 @@ from ._solution import LLHSolutionGradientDescent
 from .likelihood import StandardLLH
 
 
-__all__ = ['SVDSolution',
+__all__ = ('SVDSolution',
            'LLHSolutionMinimizer',
            'LLHSolutionGradientDescent',
            'LLHSolutionMCMC',
-           'StandardLLH']
+           'StandardLLH')

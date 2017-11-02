@@ -15,8 +15,8 @@ class DSEAGaussianNB(Solution):
         super(DSEAGaussianNB, self).initialize()
         self.trained_model = GaussianNB(priors=priors)
         self.trained_model.fit(X_A,
-                              y_A,
-                              sample_weight=sample_weight)
+                               y_A,
+                               sample_weight=sample_weight)
 
     def fit(self, X_test, return_individual_confidences=False):
         confidences = self.trained_model.predict_proba(X_test)

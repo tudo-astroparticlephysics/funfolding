@@ -19,7 +19,7 @@ def create_C_thikonov(n_dims):
 
 class LLH(object):
     name = 'LLH'
-    status_need_for_eval = 0
+    status_needed_for_eval = 0
 
     def __init__(self):
         self.status = -1
@@ -34,23 +34,26 @@ class LLH(object):
         self.status = 0
 
     def evaluate_llh(self):
-        if self.status < 0:
-            raise RuntimeError("LLH has to be intilized. "
-                               "Run 'LLH.initialize' first!")
+        if self.status < self.status_needed_for_eval:
+            msg = 'LLH needs status {} not {} to be evaluated'.format(
+                self.status_needed_for_eval, self.status)
+            raise RuntimeError(msg)
 
     def evaluate_gradient(self):
         if self.gradient_defined:
-            if self.status < 0:
-                raise RuntimeError("LLH has to be intilized. "
-                                   "Run 'LLH.initialize' first!")
+            if self.status < self.status_needed_for_eval:
+                msg = 'LLH needs status {} not {} to be evaluated'.format(
+                    self.status_needed_for_eval, self.status)
+                raise RuntimeError(msg)
         else:
             raise NotImplementedError("Gradients are not implemented!")
 
     def evaluate_hessian(self):
         if self.hessian_matrix_defined:
-            if self.status < 0:
-                raise RuntimeError("LLH has to be intilized. "
-                                   "Run 'LLH.initialize' first!")
+            if self.status < self.status_needed_for_eval:
+                msg = 'LLH needs status {} not {} to be evaluated'.format(
+                    self.status_needed_for_eval, self.status)
+                raise RuntimeError(msg)
         else:
             raise NotImplementedError("hessian Matrix is not implemented!")
 
@@ -60,18 +63,18 @@ class LLH(object):
 
 class StandardLLH(LLH):
     name = 'StandardLLH'
-    status_need_for_eval = 0
+    status_needed_for_eval = 0
 
     def __init__(self,
                  tau=None,
                  C='thikonov',
-                 vec_acceptance=None,
+                 reg_factor_f=None,
                  log_f=False):
         super(StandardLLH, self).__init__()
         self.C = C
         self.tau = tau
         self.log_f_reg = log_f
-        self.vec_acceptance = vec_acceptance
+        self.reg_factor_f = reg_factor_f
 
     def initialize(self,
                    vec_g,
@@ -108,13 +111,13 @@ class StandardLLH(LLH):
                         self.C))
                 self._C = np.dot(np.dot(m_C, np.diag(self._tau)), m_C)
 
-        if self.vec_acceptance is not None:
-            if len(self.vec_acceptance) != model.dim_f:
-                raise ValueError("'vec_acceptance' has to be of the same "
+        if self.reg_factor_f is not None:
+            if len(self.reg_factor_f) != model.dim_f:
+                raise ValueError("'reg_factor_f' has to be of the same "
                                  "length as vec_f!")
-            self.vec_acceptance = self.vec_acceptance
+            self.reg_factor_f = self.reg_factor_f
         else:
-            self.vec_acceptance = 1.
+            self.reg_factor_f = 1.
 
         if isinstance(model, LinearModel):
             self.gradient_defined = True
@@ -127,7 +130,7 @@ class StandardLLH(LLH):
             return np.inf * -1
         poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
         if self._tau is not None:
-            f_reg_used = f_reg * self.vec_acceptance
+            f_reg_used = f_reg * self.reg_factor_f
             if self.log_f_reg:
                 f_reg_used = np.log10(f_reg_used + 1)
             regularization_part = -0.5 * np.dot(
@@ -146,7 +149,7 @@ class StandardLLH(LLH):
         h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
         h_unreg -= part_b
         if self._tau is not None:
-            f_reg_used = f_reg * self.vec_acceptance
+            f_reg_used = f_reg * self.reg_factor_f
             if self.log_f_reg:
                 f_reg_used = np.log10(f_reg_used + 1)
             regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
@@ -173,6 +176,73 @@ class StandardLLH(LLH):
 
     def evaluate_neg_hessian(self, f):
         return self.evaluate_hessian(f) * -1.
+
+
+class StepLLH(LLH):
+    name = 'StepLLH'
+    status_needed_for_eval = 1
+
+    def __init__(self):
+        super(StepLLH, self).__init__()
+        self.__previous_f = None
+        self.__step = None
+
+    def set_fs(self, previous_f, current_f):
+        self.status = 1
+        self.__previous_f = previous_f
+        self.__step = previous_f - current_f
+
+    def initialize(self,
+                   vec_g,
+                   model):
+        super(StepLLH, self).initialize()
+        if not isinstance(model, Model):
+            raise ValueError("'model' has to be of type Model!")
+        self.model = model
+        self.vec_g = vec_g
+        self.N = np.sum(vec_g)
+
+        if isinstance(model, LinearModel):
+            self.gradient_defined = True
+            self.hessian_matrix_defined = True
+
+    def evaluate_llh(self, a):
+        super(StepLLH, self).evaluate_llh()
+        f = self.__previous_f + a * self.__step
+        g_est, f, _ = self.model.evaluate(a)
+        if any(g_est < 0) or any(f < 0):
+            return np.inf * -1
+        poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
+        return poisson_part
+
+    def evaluate_neg_llh(self, a):
+        return self.evaluate_llh(a) * -1.
+
+    def evaluate_gradient(self, a):
+        raise NotImplementedError()
+        super(StepLLH, self).evaluate_gradient()
+        f = self.__previous_f + a * self.__step
+        g_est, f, _ = self.model.evaluate(f)
+        part_b = np.sum(self.model.A, axis=0)
+        h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
+        h_unreg -= part_b
+        return h_unreg
+
+    def evaluate_neg_gradient(self, a):
+        return self.evaluate_gradient(a) * -1.
+
+    def evaluate_hessian(self, a):
+        raise NotImplementedError()
+        super(StepLLH, self).evaluate_hessian()
+        f = self.__previous_f + a * self.__step
+        g_est, f, _ = self.model.evaluate(f)
+        H_unreg = -np.dot(np.dot(self.model.A.T,
+                                 np.diag(self.vec_g / g_est**2)),
+                          self.model.A)
+        return H_unreg
+
+    def evaluate_neg_hessian(self, a):
+        return self.evaluate_hessian(a) * -1.
 
 
 class LLHThikonovForLoops:

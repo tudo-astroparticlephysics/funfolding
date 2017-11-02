@@ -4,4 +4,4 @@ from . import solution
 from . import pipeline
 from . import visualization
 
-__all__ = ['binning', 'model', 'solution', 'pipeline', 'visualization']
+__all__ = ('binning', 'model', 'solution', 'pipeline', 'visualization')
