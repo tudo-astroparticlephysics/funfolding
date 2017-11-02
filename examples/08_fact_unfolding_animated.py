@@ -1,4 +1,4 @@
-import logging
+import logging, os
 
 import pandas as pd
 import numpy as np
@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
     random_seed = 1337
 
-    n_walker = 100
+    n_walkers = 100
     n_steps_used = 2000
     n_samples_test = 5000
     min_samples_leaf = 20
@@ -29,9 +29,12 @@ if __name__ == '__main__':
     logging.info('========================================================')
     logging.info('Loading Data')
 
-
     random_state = np.random.RandomState(random_seed)
 
+    if not os.path.isfile('fact_simulations.hdf'):
+        from get_fact_simulations import download
+        logging.info('Downloading FACT simulations!')
+        download()
     df = pd.read_hdf('fact_simulations.hdf', 'gamma_simulation')
 
     idx = np.arange(len(df))
@@ -111,7 +114,7 @@ if __name__ == '__main__':
     logging.info('Starting MCMC')
     sol_mcmc = solution.LLHSolutionMCMC(n_burn_steps=100,
                                         n_used_steps=1000,
-                                        n_walker=100,
+                                        n_walkers=100,
                                         random_state=random_state)
     sol_mcmc.initialize(llh=llh, model=tree_model)
     sol_mcmc.set_x0_and_bounds(x0=points[idx_best])

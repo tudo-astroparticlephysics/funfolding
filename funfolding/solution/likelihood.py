@@ -1,20 +1,24 @@
 import numpy as np
+import pymc3 as pm
 
 from ..model import LinearModel, Model
+import theano
 
 
-def create_C_thikonov(n_dims):
+def create_C_thikonov(n_dims, crop_beginning=False, crop_end=False):
     C = np.zeros((n_dims, n_dims))
-    C[0, 0] = -1
-    C[0, 1] = 1
+    if not crop_beginning:
+        C[0, 0] = -1
+        C[0, 1] = 1
     idx_N = n_dims - 1
     for i in range(1, idx_N):
         C[i, i] = -2.
         C[i, i - 1] = 1
         C[i, i + 1] = 1
-    C[idx_N, idx_N] = -1
-    C[idx_N, idx_N - 1] = 1
-    return np.dot(C.T, C)
+    if not crop_end:
+        C[idx_N, idx_N] = -1
+        C[idx_N, idx_N - 1] = 1
+    return C
 
 
 class LLH(object):
@@ -61,7 +65,7 @@ class LLH(object):
         return self.evaluate_llh(f)
 
 
-class StandardLLH(LLH):
+class StandardLLHAlt(LLH):
     name = 'StandardLLH'
     status_needed_for_eval = 0
 
@@ -76,15 +80,27 @@ class StandardLLH(LLH):
         self.log_f_reg = log_f
         self.reg_factor_f = reg_factor_f
 
+    def __call__(self, f):
+        return self.evaluate_llh(f)
+
     def initialize(self,
                    vec_g,
-                   model):
+                   model,
+                   crop_C_beginning=False,
+                   crop_C_end=False):
         super(StandardLLH, self).initialize()
         if not isinstance(model, Model):
             raise ValueError("'model' has to be of type Model!")
         self.model = model
         self.vec_g = vec_g
         self.N = np.sum(vec_g)
+
+        if self.reg_factor_f is not None:
+            if len(self.reg_factor_f) != model.dim_f:
+                raise ValueError("'reg_factor_f' has to be of the same "
+                                 "length as vec_f!")
+        else:
+            self.reg_factor_f = np.ones(model.dim_f)
 
         if self.tau is None:
             self._tau = None
@@ -102,22 +118,17 @@ class StandardLLH(LLH):
             if self._tau is not None:
                 if isinstance(self.C, str):
                     if self.C.lower() == 'thikonov' or self.C.lower() == '2':
-                        m_C = create_C_thikonov(model.dim_f)
+                        m_C = create_C_thikonov(
+                            model.dim_f,
+                            crop_end=crop_C_end,
+                            crop_beginning=crop_C_beginning)
                 elif isinstance(self.C, int):
                     if self.C == 2:
                         m_C = create_C_thikonov(model.dim_f)
                 if m_C is None:
                     raise ValueError("{} invalid option for 'C'".format(
                         self.C))
-                self._C = np.dot(np.dot(m_C, np.diag(self._tau)), m_C)
-
-        if self.reg_factor_f is not None:
-            if len(self.reg_factor_f) != model.dim_f:
-                raise ValueError("'reg_factor_f' has to be of the same "
-                                 "length as vec_f!")
-            self.reg_factor_f = self.reg_factor_f
-        else:
-            self.reg_factor_f = 1.
+                self._C = np.dot(np.dot(m_C, np.diag(1 / self._tau)), m_C)
 
         if isinstance(model, LinearModel):
             self.gradient_defined = True
@@ -133,11 +144,11 @@ class StandardLLH(LLH):
             f_reg_used = f_reg * self.reg_factor_f
             if self.log_f_reg:
                 f_reg_used = np.log10(f_reg_used + 1)
-            regularization_part = -0.5 * np.dot(
+            reg_part = 0.5 * np.dot(
                 np.dot(f_reg_used.T, self._C), f_reg_used)
         else:
-            regularization_part = 0
-        return poisson_part - regularization_part
+            reg_part = 0
+        return poisson_part - reg_part
 
     def evaluate_neg_llh(self, f):
         return self.evaluate_llh(f) * -1.
@@ -149,14 +160,28 @@ class StandardLLH(LLH):
         h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
         h_unreg -= part_b
         if self._tau is not None:
-            f_reg_used = f_reg * self.reg_factor_f
             if self.log_f_reg:
-                f_reg_used = np.log10(f_reg_used + 1)
-            regularization_part = np.ones_like(h_unreg) * self.tau * np.dot(
-                self.C, f_reg_used)
+                reg_part = np.zeros(self.model.dim_f)
+                f_used = f_reg * self.reg_factor_f + 1
+                ln_f_used = np.log(f_used)
+                ln_10_squared = np.log(10)**2
+                pre = np.zeros((self.model.dim_f,
+                                self.model.dim_f))
+                for i in range(self.model.dim_f):
+                    for j in range(self.model.dim_f):
+                        pre_part_ij = self.reg_factor_f[i] * self._C[i, j]
+                        pre_part_ij *= ln_f_used[j]
+                        pre_part_ij /= ln_10_squared * f_used[i]
+                        pre[i] += pre_part_ij
+                for i in range(self.model.dim_f):
+                    reg_part_i = np.sum(pre[i, :])
+                    reg_part_i += np.sum(pre[:, i])
+
+            else:
+                reg_part = np.dot(self._C, f_reg * self.reg_factor_f)
         else:
-            regularization_part = 0.
-        return h_unreg - regularization_part
+            reg_part = 0.
+        return h_unreg - reg_part
 
     def evaluate_neg_gradient(self, f):
         return self.evaluate_gradient(f) * -1.
@@ -168,11 +193,229 @@ class StandardLLH(LLH):
                                  np.diag(self.vec_g / g_est**2)),
                           self.model.A)
         if self._tau is not None:
-            regularization_part = self.tau * self.C
+            if self.log_f_reg:
+                reg_part = np.zeros((self.model.dim_f,
+                                     self.model.dim_f))
+                f_used = f_reg * self.reg_factor_f + 1
+                ln_f_used = np.log(f_used)
+                ln_10_squared = np.log(10)**2
+                for i in range(self.model.dim_f):
+                    for j in range(i + 1):
+                        r = (self._C[i, j] + self._C[j, i])
+                        r *= self.reg_factor_f[i] * self.reg_factor_f[j]
+                        r /= ln_10_squared * f_used[i] * f_used[j]
+                        if i == j:
+                            r_diag = -self.reg_factor_f[j]**2 / ln_10_squared
+                            r_diag = f_used**2
+                            r_diag = np.sum((self._C[i, :] + self._C[:, i]) *
+                                            ln_f_used)
+                            reg_part[i, i] = r + r_diag
+                        else:
+                            reg_part[i, j] = r
+                            reg_part[j, i] = r
+            else:
+                reg_part = self._C
         else:
-            regularization_part = 0.
+            reg_part = 0.
 
-        return H_unreg - regularization_part
+        return H_unreg - reg_part
+
+    def evaluate_neg_hessian(self, f):
+        return self.evaluate_hessian(f) * -1.
+
+
+class StandardLLH(LLH):
+    name = 'StandardLLH'
+    status_need_for_eval = 0
+
+    def __init__(self,
+                 tau=None,
+                 C='thikonov',
+                 reg_factor_f=None,
+                 log_f=False):
+        super(StandardLLH, self).__init__()
+        self.C = C
+        self.tau = tau
+        self.log_f_reg = log_f
+        self.reg_factor_f = reg_factor_f
+
+    def __call__(self, f):
+        return self.evaluate_llh(f)
+
+    def initialize(self,
+                   vec_g,
+                   model,
+                   crop_C_beginning=False,
+                   crop_C_end=False):
+        super(StandardLLH, self).initialize()
+        if not isinstance(model, Model):
+            raise ValueError("'model' has to be of type Model!")
+        self.model = model
+        self.vec_g = vec_g
+        self.N = np.sum(vec_g)
+
+        if self.reg_factor_f is not None:
+            if len(self.reg_factor_f) != model.dim_f:
+                raise ValueError("'reg_factor_f' has to be of the same "
+                                 "length as vec_f!")
+            self.reg_factor_f = self.reg_factor_f
+        else:
+            self.reg_factor_f = np.ones(model.dim_f)
+
+        if self.tau is None:
+            self._tau = None
+        else:
+            if isinstance(self.tau, float):
+                if self.tau <= 0.:
+                    self._tau = None
+                else:
+                    self._tau = np.ones(model.dim_f) * self.tau
+            elif callable(self.tau):
+                self._tau = self.tau(np.arange(model.dim_f))
+            else:
+                raise ValueError("'tau' as to be either None, float or "
+                                 "callable!")
+            if self._tau is not None:
+                if isinstance(self.C, str):
+                    if self.C.lower() == 'thikonov' or self.C.lower() == '2':
+                        m_C = create_C_thikonov(
+                            model.dim_f,
+                            crop_end=crop_C_end,
+                            crop_beginning=crop_C_beginning)
+                elif isinstance(self.C, int):
+                    if self.C == 2:
+                        m_C = create_C_thikonov(model.dim_f)
+                if m_C is None:
+                    raise ValueError("{} invalid option for 'C'".format(
+                        self.C))
+                self._C = np.dot(np.dot(m_C, np.diag(1 / self._tau)), m_C)
+
+        if isinstance(model, LinearModel):
+            self.gradient_defined = True
+            self.hessian_matrix_defined = True
+
+    def evaluate_llh(self, f):
+        super(StandardLLH, self).evaluate_llh()
+        g_est, f, f_reg = self.model.evaluate(f)
+        if any(g_est < 0) or any(f < 0):
+            return np.inf * -1
+        poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
+        if self._tau is not None:
+            if self.log_f_reg:
+                f_reg_used = np.log10((f_reg + 1) * self.reg_factor_f)
+            else:
+                f_reg_used = f_reg * self.reg_factor_f
+            reg_part = 0.5 * np.dot(
+                np.dot(f_reg_used.T, self._C), f_reg_used)
+        else:
+            reg_part = 0
+        return poisson_part - reg_part
+
+    def create_pymc_model(self, x0=None):
+        super(StandardLLH, self).evaluate_llh()
+        model = pm.Model()
+
+        if x0 is None:
+            x0 = np.sum(self.vec_g) / self.model.dim_f
+            x0 = np.ones(self.model.dim_f, dtype=float) * x0
+
+        with model:
+            A = theano.shared(self.model.A)
+            vec_g = theano.shared(self.vec_g)
+            f = pm.Uniform('f',
+                           testval=x0,
+                           lower=0,
+                           upper=np.sum(self.vec_g),
+                           shape=self.model.dim_f)
+            g_est = theano.tensor.dot(A, f)
+            poisson_part = pm.Poisson('poisson_part_llh',
+                                      mu=g_est,
+                                      observed=vec_g)
+            if self.tau > 0:
+                reg_factor_f = theano.shared(self.reg_factor_f)
+                _C = theano.shared(self._C)
+                if self.log_f_reg:
+                    def calc_reg_part(f_reg):
+                        f_reg_used = theano.tensor.log10(
+                            (f_reg + 1) * reg_factor_f)
+                        return 0.5 * theano.tensor.dot(
+                            theano.tensor.dot(f_reg_used.T, _C),
+                            f_reg_used)
+                else:
+                    def calc_reg_part(f_reg):
+                        return 0.5 * theano.tensor.dot(
+                            theano.tensor.dot(f_reg.T, _C),
+                            f_reg)
+                reg_part = pm.Deterministic('reg_part', calc_reg_part(f))
+            else:
+                reg_part = 0.
+            pm.Deterministic('logp',
+                             theano.tensor.sum(poisson_part) - reg_part)
+        return model
+
+    def evaluate_neg_llh(self, f):
+        return self.evaluate_llh(f) * -1.
+
+    def evaluate_gradient(self, f):
+        super(StandardLLH, self).evaluate_gradient()
+        g_est, f, f_reg = self.model.evaluate(f)
+        part_b = np.sum(self.model.A, axis=0)
+        h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
+        h_unreg -= part_b
+        if self._tau is not None:
+            if self.log_f_reg:
+                reg_part = np.zeros(self.model.dim_f)
+                denom_f = f_reg + 1
+                nom_f = np.log(denom_f * self.reg_factor_f)
+                ln_10_squared = np.log(10)**2
+                pre = np.zeros((self.model.dim_f,
+                                self.model.dim_f))
+                for i in range(self.model.dim_f):
+                    for j in range(self.model.dim_f):
+                        pre[i, j] = self._C[i, j] * nom_f[i]
+                        pre[i, j] /= ln_10_squared * denom_f[i]
+                for i in range(self.model.dim_f):
+                    reg_part_i = np.sum(pre[i, :])
+                    reg_part_i += np.sum(pre[:, i])
+            else:
+                reg_part = np.dot(self._C, f_reg * self.reg_factor_f)
+        else:
+            reg_part = 0.
+        return h_unreg - reg_part
+
+    def evaluate_neg_gradient(self, f):
+        return self.evaluate_gradient(f) * -1.
+
+    def evaluate_hessian(self, f):
+        super(StandardLLH, self).evaluate_hessian()
+        g_est, f, f_reg = self.model.evaluate(f)
+        H_unreg = -np.dot(np.dot(self.model.A.T,
+                                 np.diag(self.vec_g / g_est**2)),
+                          self.model.A)
+        if self._tau is not None:
+            if self.log_f_reg:
+                pre = np.dot(np.dot(np.diag(f_reg + 1), self._C),
+                             np.diag(f_reg + 1)) / np.log(10)**2
+                ln_f_used = np.log((f_reg + 1) * self.reg_factor_f)
+                pre_diag_1 = np.dot(pre, np.diag(ln_f_used))
+                pre_diag_2 = np.dot(np.diag(ln_f_used), pre)
+                reg_part = np.zeros_like(pre)
+                for i in range(self.model.dim_f):
+                    for j in range(i + 1):
+                        r = pre[i, j] + pre[j, i]
+                        if i == j:
+                            r += np.sum(pre_diag_1, axis=1)
+                            r += np.sum(pre_diag_2, axis=1)
+                            reg_part[i, j]
+                        else:
+                            reg_part[i, j] = r
+                            reg_part[j, i] = r
+            else:
+                reg_part = self._C
+        else:
+            reg_part = 0.
+
+        return H_unreg - reg_part
 
     def evaluate_neg_hessian(self, f):
         return self.evaluate_hessian(f) * -1.

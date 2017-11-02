@@ -38,7 +38,7 @@ class Binning(object):
             original_sum = np.sum(sample_weight)
         else:
             original_sum = X.shape[0]
-        binned = self.digitize(X=X, sample_weight=sample_weight)
+        binned = self.digitize(X=X)
         counted = np.bincount(binned,
                               weights=sample_weight,
                               minlength=self.n_bins)

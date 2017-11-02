@@ -260,7 +260,8 @@ class LinearModel(Model):
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
         U, S_values, V = linalg.svd(self.A)
-        S_values = S_values / S_values[0]
+        if normalize:
+            S_values = S_values / S_values[0]
         return S_values
 
     def __generate_binning__(self):
