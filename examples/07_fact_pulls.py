@@ -83,7 +83,7 @@ def do_single_pull(obs_array_binning,
     sol_mini = solution.LLHSolutionMinimizer()
     sol_mini.initialize(llh=llh, model=tree_model)
     sol_mini.set_x0_and_bounds(x0=x[idx_best])
-    best_fit = sol_mini.fit(constrain_N=False)[0]
+    best_fit, _ = sol_mini.fit(constrain_N=False)[0]
 
     vec_f_str = ', '.join('{0:.2f}'.format(a)
                           for a in best_fit.x)

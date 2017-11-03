@@ -13,7 +13,7 @@ except ImportError:
 
 from ..model import LinearModel
 from .error_calculation import calc_feldman_cousins_errors_binned
-from .likelihood import StandardLLH
+from .likelihood import StandardLLH, StepLLH
 
 
 class Solution(object):
@@ -115,17 +115,30 @@ class LLHSolutionMinimizer(Solution):
 
     def set_x0_and_bounds(self, x0=None, bounds=False):
         super(LLHSolutionMinimizer, self).set_x0_and_bounds()
-        if x0 is None:
-            x0 = self.model.generate_fit_x0(self.vec_g)
-        if bounds is None:
-            bounds = self.model.generate_fit_bounds(self.vec_g)
-        elif isinstance(bounds, bool):
-            if bounds:
+        if isinstance(self.llh, StandardLLH):
+            if x0 is None:
+                x0 = self.model.generate_fit_x0(self.vec_g)
+            if bounds is None:
                 bounds = self.model.generate_fit_bounds(self.vec_g)
-            else:
+            elif isinstance(bounds, bool):
+                if bounds:
+                    bounds = self.model.generate_fit_bounds(self.vec_g)
+                else:
+                    bounds = None
+            self.x0 = x0
+            self.bounds = bounds
+        elif isinstance(self.llh, StepLLH):
+            if x0 is None:
+                x0 = 1.
+            if bounds is None:
                 bounds = None
-        self.x0 = x0
-        self.bounds = bounds
+            elif isinstance(bounds, bool):
+                if bounds:
+                    bounds = [[0., np.inf]]
+                else:
+                    bounds = None
+            self.x0 = x0
+            self.bounds = bounds
 
     def fit(self, constrain_N=True):
         super(LLHSolutionMinimizer, self).fit()
@@ -141,12 +154,16 @@ class LLHSolutionMinimizer(Solution):
                             method='SLSQP',
                             constraints=cons,
                             options={'maxiter': 10000})
-        try:
-            hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
-            V_f_est = linalg.inv(hess_matrix)
-        except NotImplementedError:
-            V_f_est = None
-        return solution, V_f_est
+        if isinstance(self.llh, StandardLLH):
+            try:
+                hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
+                V_f_est = linalg.inv(hess_matrix)
+            except NotImplementedError:
+                V_f_est = None
+            return solution, V_f_est
+        elif isinstance(self.llh, StepLLH):
+            vec_f_est = self.llh.generate_vec_f_est(solution.x)
+            return solution, vec_f_est
 
 
 class LLHSolutionGradientDescent(LLHSolutionMinimizer):

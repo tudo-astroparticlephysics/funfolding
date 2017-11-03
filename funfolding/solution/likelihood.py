@@ -304,7 +304,10 @@ class StandardLLH(LLH):
             if self.log_f_reg:
                 f_reg_used = np.log10((f_reg + 1) * self.reg_factor_f)
             else:
-                f_reg_used = f_reg * self.reg_factor_f
+                f_reg_used = (f_reg - self.reg_factor_f) / self.reg_factor_f
+                if any(np.isnan(f_reg_used)):
+                    exit()
+
             reg_part = 0.5 * np.dot(
                 np.dot(f_reg_used.T, self._C), f_reg_used)
         else:
@@ -433,7 +436,10 @@ class StepLLH(LLH):
     def set_fs(self, previous_f, current_f):
         self.status = 1
         self.__previous_f = previous_f
-        self.__step = previous_f - current_f
+        self.__step = current_f - previous_f
+
+    def generate_vec_f_est(self, a):
+        return self.__previous_f + a * self.__step
 
     def initialize(self,
                    vec_g,
@@ -452,7 +458,7 @@ class StepLLH(LLH):
     def evaluate_llh(self, a):
         super(StepLLH, self).evaluate_llh()
         f = self.__previous_f + a * self.__step
-        g_est, f, _ = self.model.evaluate(a)
+        g_est, f, _ = self.model.evaluate(f)
         if any(g_est < 0) or any(f < 0):
             return np.inf * -1
         poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)

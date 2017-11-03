@@ -13,6 +13,11 @@ class DSEAGaussianNB(Solution):
 
     def initialize(self, X_A, y_A, sample_weight=None, priors=None):
         super(DSEAGaussianNB, self).initialize()
+        if priors is None:
+            priors = np.ones(len(np.unique(y_A)), dtype=float)
+            priors /= len(priors)
+        priors = np.array(priors, dtype=np.float16)
+        priors /= np.sum(priors)
         self.trained_model = GaussianNB(priors=priors)
         self.trained_model.fit(X_A,
                                y_A,

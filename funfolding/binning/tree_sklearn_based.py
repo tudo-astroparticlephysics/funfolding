@@ -36,7 +36,6 @@ def __sample_uniform__(y, sample_weight=None, random_state=None):
     mask: list of bools
         A boolean mask for y. True for samples that should be kept.
     """
-    print('sampling uniform')
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
 
