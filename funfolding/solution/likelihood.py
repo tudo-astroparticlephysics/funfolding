@@ -462,12 +462,12 @@ class StepLLH(LLH):
         return self.evaluate_llh(a) * -1.
 
     def evaluate_gradient(self, a):
-        raise NotImplementedError()
         super(StepLLH, self).evaluate_gradient()
         f = self.__previous_f + a * self.__step
         g_est, f, _ = self.model.evaluate(f)
-        part_b = np.sum(self.model.A, axis=0)
-        h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
+        A_delta = np.dot(self.model.A, self.__step)
+        part_b = np.sum(A_delta, axis=0)
+        h_unreg = np.sum(A_delta * (1 / g_est), axis=1)
         h_unreg -= part_b
         return h_unreg
 
@@ -475,13 +475,11 @@ class StepLLH(LLH):
         return self.evaluate_gradient(a) * -1.
 
     def evaluate_hessian(self, a):
-        raise NotImplementedError()
         super(StepLLH, self).evaluate_hessian()
         f = self.__previous_f + a * self.__step
         g_est, f, _ = self.model.evaluate(f)
-        H_unreg = -np.dot(np.dot(self.model.A.T,
-                                 np.diag(self.vec_g / g_est**2)),
-                          self.model.A)
+        A_delta = np.dot(self.model.A, self.__step)
+        H_unreg = - (self.vec_g * A_delta**2) / g_est**2
         return H_unreg
 
     def evaluate_neg_hessian(self, a):
