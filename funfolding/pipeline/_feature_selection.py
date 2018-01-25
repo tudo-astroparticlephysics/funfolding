@@ -372,13 +372,16 @@ def recursive_feature_selection_condition_pulls_map(X,
                                                     n_tasks_per_job=1,
                                                     X_merge=None,
                                                     binning_y=None,
-                                                    log_loss=False,
+                                                    criteria='log_loss',
                                                     merge_kw={},
                                                     return_full=False,
+                                                    preselection=[],
+                                                    k_features=-1,
                                                     random_state=None):
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
     order = []
+    order.extend(preselection)
     final_criteria_mean = np.zeros(X.shape[1])
     final_criteria_std = np.zeros(X.shape[1])
     features = range(X.shape[1])
@@ -389,14 +392,12 @@ def recursive_feature_selection_condition_pulls_map(X,
     work_on_task.X_merge = X_merge
     work_on_task.merge_kw = merge_kw
     work_on_task.binning_y = binning_y
-    work_on_task.log_loss = log_loss
+    work_on_task.criteria = criteria
 
     full_criteria = []
 
-    while len(unused) > 0:
-        print(order)
+    while len(unused) > 0 and len(order) < k_features:
         criteria = np.ones((len(unused), n_folds)) * np.inf
-        results = []
         feature_sets = []
         idx = []
         for i, feature in enumerate(unused):
@@ -418,13 +419,15 @@ def recursive_feature_selection_condition_pulls_map(X,
                                  feature_sets[i],
                                  indices,
                                  binning.copy())
-                results.append(work_on_task(task_params=task_params_i))
+                idx, criteria_i = work_on_task(task_params=task_params_i)
+                criteria[idx[0], idx[1]] = criteria_i
         else:
             with ProcessPoolExecutor(max_workers=n_jobs) as executor:
                 def future_callback(future):
                     future_callback.finished += 1
                     if not future.cancelled():
-                        results.append(future.result())
+                        idx, criteria_i = future.result()
+                        criteria[idx[0], idx[1]] = criteria_i
                     else:
                         raise RuntimeError('Subprocess crashed!')
                     future_callback.running -= 1
@@ -447,9 +450,6 @@ def recursive_feature_selection_condition_pulls_map(X,
                         task_params=task_params_i)
                     future.add_done_callback(future_callback)
                     future_callback.running += 1
-
-        for idx, criteria_i in results:
-            criteria[idx[0], idx[1]] = criteria_i
         full_criteria.append(criteria)
         mean_criteria = np.mean(criteria, axis=1)
         std_criteria = np.std(criteria, axis=1)
@@ -469,7 +469,7 @@ def recursive_feature_selection_condition_pulls_map(X,
     work_on_task.X_merge = None
     work_on_task.merge_kw = None
     work_on_task.binning_y = None
-    work_on_task.log_loss = False
+    work_on_task.criteria = criteria
     if return_full:
         return order, final_criteria_mean, final_criteria_std, full_criteria
     else:
@@ -485,15 +485,18 @@ def work_on_task(task_params):
     y_train = work_on_task.y[binning_idx]
     X_test = work_on_task.X[A_idx, :][:, feature_set]
     binning_i.fit(X_train, y_train)
-    if work_on_task.log_loss:
+    if work_on_task.criteria.lower == 'log_loss':
         if work_on_task.binning_y is not None:
-            raise ValueError('Regression not valid for log_loss')
+            raise ValueError('Regression not valid for criteria')
         else:
             y_test = work_on_task.y[A_idx]
         predicted_probas = binning_i.predict_proba(X_test)
         loss = log_loss(y_test, predicted_probas)
         return idx, loss
-    else:
+    elif work_on_task.criteria.lower == 'feature_importances':
+        importance = binning_i.tree.feature_importances_[-1]
+        return idx, importance
+    elif work_on_task.criteria.lower == 'condition':
         if work_on_task.binning_y is not None:
             y_test = np.digitize(work_on_task.y[A_idx],
                                  bins=work_on_task.binning_y)

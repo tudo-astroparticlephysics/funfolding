@@ -276,7 +276,11 @@ class LinearModel(Model):
                                     self.dim_f + 1)
         return binning_obs, binning_truth
 
-    def generate_vectors(self, digitized_obs=None, digitized_truth=None):
+    def generate_vectors(self,
+                         digitized_obs=None,
+                         digitized_truth=None,
+                         obs_weights=None,
+                         truth_weights=None):
         """Returns vec_g, vec_f for digitized values. Either f, g or both
         can be provided to the function.
 
@@ -300,11 +304,15 @@ class LinearModel(Model):
         """
         binning_obs, binning_truth = self.__generate_binning__()
         if digitized_obs is not None:
-            vec_g = np.histogram(digitized_obs, bins=binning_obs)[0]
+            vec_g = np.histogram(digitized_obs,
+                                 bins=binning_obs,
+                                 weights=obs_weights)[0]
         else:
             vec_g = None
         if digitized_truth is not None:
-            vec_f = np.histogram(digitized_truth, bins=binning_truth)[0]
+            vec_f = np.histogram(digitized_truth,
+                                 bins=binning_truth,
+                                 weights=truth_weights)[0]
         else:
             vec_f = None
         return vec_g, vec_f
