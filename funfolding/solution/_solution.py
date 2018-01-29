@@ -160,6 +160,10 @@ class LLHSolutionMinimizer(Solution):
                 V_f_est = linalg.inv(hess_matrix)
             except NotImplementedError:
                 V_f_est = None
+            except ValueError as e:
+                warnings.warn(
+                    'Inversion of the Hessian matrix failed: {}'.format(e))
+                V_f_est = None
             return solution, V_f_est
         elif isinstance(self.llh, StepLLH):
             vec_f_est = self.llh.generate_vec_f_est(solution.x)
