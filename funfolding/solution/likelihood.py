@@ -255,7 +255,12 @@ class StandardLLH(LLH):
         self.N = np.sum(vec_g)
 
         if self.reg_factor_f is not None:
-            if len(self.reg_factor_f) != model.dim_f:
+            eff_length_reg_factor = len(self.reg_factor_f)
+            if crop_C_beginning:
+                eff_length_reg_factor -= 1
+            if crop_C_end:
+                eff_length_reg_factor -= 1
+            if eff_length_reg_factor != model.dim_f:
                 raise ValueError("'reg_factor_f' has to be of the same "
                                  "length as vec_f!")
             self.reg_factor_f = self.reg_factor_f

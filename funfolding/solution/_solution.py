@@ -153,7 +153,7 @@ class LLHSolutionMinimizer(Solution):
                             bounds=self.bounds,
                             method='SLSQP',
                             constraints=cons,
-                            options={'maxiter': 10000})
+                            options={'maxiter': 500})
         if isinstance(self.llh, StandardLLH):
             try:
                 hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
