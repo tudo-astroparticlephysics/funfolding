@@ -30,7 +30,7 @@ def calc_feldman_cousins_errors_binned(best_fit,
         eps_i = range_percent * eps
         min_s = np.min(sample_i)
         max_s = np.max(sample_i)
-
+        print(eps_i)
         binning = np.arange(min_s - 0.5 * eps_i,
                             max_s + 1.5 * eps_i,
                             eps_i)

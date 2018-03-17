@@ -12,7 +12,7 @@ except ImportError:
     no_pymc = True
 
 from ..model import LinearModel
-from .error_calculation import calc_feldman_cousins_errors_binned
+from .error_calculation import calc_feldman_cousins_errors
 from .likelihood import StandardLLH, StepLLH
 
 
@@ -160,9 +160,8 @@ class LLHSolutionMinimizer(Solution):
                 V_f_est = linalg.inv(hess_matrix)
             except NotImplementedError:
                 V_f_est = None
-            except ValueError as e:
-                warnings.warn(
-                    'Inversion of the Hessian matrix failed: {}'.format(e))
+            except ValueError:
+                warnings.warn('Inversion of the Hessian matrix failed!')
                 V_f_est = None
             return solution, V_f_est
         elif isinstance(self.llh, StepLLH):
@@ -255,7 +254,7 @@ class LLHSolutionMCMC(Solution):
         vec_f, samples, probs = self.__run_mcmc__(sampler,
                                                   pos_x0,
                                                   n_steps)
-        sigma_vec_f = calc_feldman_cousins_errors_binned(vec_f, samples)
+        sigma_vec_f = calc_feldman_cousins_errors(vec_f, samples)
         return vec_f, sigma_vec_f, samples, probs
 
     def __initiallize_mcmc__(self):

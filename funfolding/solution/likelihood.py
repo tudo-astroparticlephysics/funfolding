@@ -412,9 +412,9 @@ class StandardLLH(LLH):
                     for j in range(i + 1):
                         r = pre[i, j] + pre[j, i]
                         if i == j:
-                            r += np.sum(pre_diag_1, axis=1)
-                            r += np.sum(pre_diag_2, axis=1)
-                            reg_part[i, j]
+                            r += np.sum(pre_diag_1[i, :])
+                            r += np.sum(pre_diag_2[i, :])
+                            reg_part[i, j] = r
                         else:
                             reg_part[i, j] = r
                             reg_part[j, i] = r
