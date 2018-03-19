@@ -140,8 +140,8 @@ class SystematicLLH(LLH):
                 else:
                     raise ValueError(
                         "Length of 'tau'={} invalid! {} needed".format(
-                        len(self.tau),
-                        model.dim_f))
+                            len(self.tau),
+                            model.dim_f))
             else:
                 raise ValueError("'tau' as to be either None, float or "
                                  "callable!")
