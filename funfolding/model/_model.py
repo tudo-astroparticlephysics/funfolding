@@ -584,7 +584,7 @@ class PolynominalSytematic(object):
         return factors[baseline_digitized]
 
     def __call__(self, baseline_digitized, x):
-        self.evaluate(baseline_digitized, x)
+        return self.evaluate(baseline_digitized, x)
 
 
 class ArrayCacheTransformation(object):
@@ -653,7 +653,7 @@ class LinearModelSystematics(Model):
             Vector f for which the model should be evaluated.
     """
     def __init__(self, systematics=[], cache_precision=[]):
-        super(LinearModel, self).__init__()
+        super(LinearModelSystematics, self).__init__()
         self.range_obs = None
         self.range_truth = None
         self.A = None
@@ -694,7 +694,7 @@ class LinearModelSystematics(Model):
         """
 
         """
-        super(LinearModel, self).initialize()
+        super(LinearModelSystematics, self).initialize()
         self.range_obs = (min(digitized_obs), max(digitized_obs))
         self.range_truth = (min(digitized_truth), max(digitized_truth))
         self.dim_f = self.range_truth[1] - self.range_truth[0] + 1
@@ -708,14 +708,17 @@ class LinearModelSystematics(Model):
         if self.sample_weight is None:
             weights = weight_factors
         else:
-            weights = self.sample_weight * weight_factors
+            if weight_factors is not None:
+                weights = self.sample_weight * weight_factors
+            else:
+                weights = self.sample_weight
         binning_g, binning_f = self.__generate_binning__()
         A = np.histogram2d(x=self.digitized_obs,
                            y=self.digitized_truth,
                            bins=(binning_g, binning_f),
                            weights=weights)[0]
-        M_norm = np.diag(1 / np.sum(self.A, axis=0))
-        A = np.dot(self.A, M_norm)
+        M_norm = np.diag(1 / np.sum(A, axis=0))
+        A = np.dot(A, M_norm)
         return A
 
     def evaluate(self, vec_fit):
@@ -739,9 +742,9 @@ class LinearModelSystematics(Model):
             Vector that should be passed to the regularization. For the
             BasisLinearModel it is identical to f.
         """
-        super(LinearModel, self).evaluate()
-        vec_f = vec_fit[:self.model.dim_f]
-        nuissance_parameters = vec_fit[self.model.dim_f:]
+        super(LinearModelSystematics, self).evaluate()
+        vec_f = vec_fit[:self.dim_f]
+        nuissance_parameters = vec_fit[self.dim_f:]
         A = self.A.copy()
         for s, x_s, c_t in zip(self.systematics,
                                nuissance_parameters,
@@ -766,7 +769,7 @@ class LinearModelSystematics(Model):
         if weight_factors is None:
             return None
         A = self.__generate_matrix_A(weight_factors=weight_factors)
-        A /= self.A
+        A[A > 0] /= self.A[A > 0]
         if cache_transformation is not None:
             self.__cache[systematic.name][x] = A
         return A
@@ -788,7 +791,7 @@ class LinearModelSystematics(Model):
         vec_f_0 : np.array, shape=(dim_f)
             Seed vector of a minimization.
         """
-        super(LinearModel, self).generate_fit_x0()
+        super(LinearModelSystematics, self).generate_fit_x0()
         n = self.A.shape[1]
         if self.has_background:
             vec_f_0 = np.ones(n) * (np.sum(vec_g) - np.sum(self.vec_b)) / n
@@ -825,7 +828,7 @@ class LinearModelSystematics(Model):
     def set_model_x0(self):
         """The LinearModel has no referenz model_x0.
         """
-        super(LinearModel, self).set_model_x0()
+        super(LinearModelSystematics, self).set_model_x0()
         warnings.warn('\tx0 has no effect for {}'.format(self.name))
 
     def evaluate_condition(self, normalize=True):
@@ -911,5 +914,5 @@ class LinearModelSystematics(Model):
         vec_b : numpy.array, shape=(dim_g)
             Vector g which is added to the model evaluation.
         """
-        super(LinearModel, self).add_background()
+        super(LinearModelSystematics, self).add_background()
         self.vec_b = vec_b
