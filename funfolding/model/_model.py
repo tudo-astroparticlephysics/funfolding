@@ -587,7 +587,7 @@ class PolynominalSytematic(object):
         self.evaluate(baseline_digitized, x)
 
 
-class ArrayCache(object):
+class ArrayCacheTransformation(object):
     def __init__(self, array):
         self.array = array
 
@@ -595,13 +595,14 @@ class ArrayCache(object):
         return self.array[np.argmin(np.absolute(x - self.array))]
 
 
-class FloatCache(object):
-    def __init__(self, value):
+class FloatCacheTransformation(object):
+    def __init__(self, value, offset=0.):
         self.value = value
+        self.offset = offset
 
     def __call__(self, x):
-        a = x / self.value
-        return np.floor((a + 0.5)) * self.value
+        a = (x - self.offset) / self.value
+        return np.floor((a + 0.5)) * self.value + self.offset
 
 
 class LinearModelSystematics(Model):
@@ -667,15 +668,23 @@ class LinearModelSystematics(Model):
         self.cache_precision = cache_precision
         if cache_precision is not None:
             self.__cache = {}
+            cache_error = ValueError('cache_precision has to be either None, '
+                                     'float, (float, float) or a np.array!')
             for i, (s, p) in enumerate(zip(systematics, cache_precision)):
                 if p is not None:
                     if isinstance(p, float):
-                        self.cache_precision[i] = FloatCache(p)
+                        self.cache_precision[i] = FloatCacheTransformation(p)
+                    elif isinstance(p, list) or isinstance(p, tuple):
+                        if len(p) == 2:
+                            self.cache_precision[i] = FloatCacheTransformation(
+                                value=p[0],
+                                offset=p[1])
+                        else:
+                            raise cache_error
                     elif isinstance(p, np.array):
-                        self.cache_precision[i] = ArrayCache(p)
+                        self.cache_precision[i] = ArrayCacheTransformation(p)
                     else:
-                        raise ValueError('cache_precision has to be either '
-                                         'None, float or a np.array')
+                        raise cache_error
                     self.__cache[s.name] = {}
 
     def initialize(self,
