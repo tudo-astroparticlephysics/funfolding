@@ -163,6 +163,7 @@ class StandardLLH(LLH):
             return np.inf * -1
         poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
         if self._tau is not None:
+            f_reg = f_reg[self._f_slice]
             if self.log_f_reg:
                 f_reg_used = np.log10((f_reg + 1) * self.reg_factor_f)
             else:
