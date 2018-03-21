@@ -111,7 +111,8 @@ class StandardLLH(LLH):
             if self._tau.lower() == 'None':
                 self._tau = None
         else:
-            self._f_slice = slice(ignore_n_bins_low, ignore_n_bins_high)
+            self._f_slice = slice(ignore_n_bins_low,
+                                  model.dim_f - ignore_n_bins_high)
             if len(self.reg_factor_f) != eff_f_length:
                 raise ValueError(
                     'Length of f used for regularization != length of '
