@@ -92,8 +92,8 @@ class StandardLLH(LLH):
     def initialize(self,
                    vec_g,
                    model,
-                   ignore_n_bins_low=False,
-                   ignore_n_bins_high=False):
+                   ignore_n_bins_low=0,
+                   ignore_n_bins_high=0):
         super(StandardLLH, self).initialize()
         if not isinstance(model, Model):
             raise ValueError("'model' has to be of type Model!")
@@ -140,7 +140,7 @@ class StandardLLH(LLH):
                                  "callable!")
             if self._tau is not None:
                 m_C = None
-                if isinstance(self.C, str):
+                if isinstance(self.C, basestring):
                     if self.C.lower() == 'thikonov' or self.C.lower() == '2':
                         m_C = create_C_thikonov(
                             eff_f_length)
