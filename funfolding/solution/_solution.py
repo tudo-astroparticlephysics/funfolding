@@ -12,7 +12,8 @@ except ImportError:
     no_pymc = True
 
 from ..model import LinearModel
-from .error_calculation import calc_feldman_cousins_errors
+from .error_calculation import calc_feldman_cousins_errors, \
+    calc_feldman_cousins_errors_binned
 from .likelihood import StandardLLH, StepLLH
 
 

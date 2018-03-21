@@ -14,7 +14,7 @@ def create_C_thikonov(n_dims,
     idx_N = n_dims - 1 - ignore_n_bins_high
     C[idx_N, idx_N] = -1
     C[idx_N, idx_N - 1] = 1
-    for i in range(1+ignore_n_bins_low, idx_N):
+    for i in range(1 + ignore_n_bins_low, idx_N):
         C[i, i] = -2.
         C[i, i - 1] = 1
         C[i, i + 1] = 1
@@ -274,7 +274,6 @@ class StandardLLH(LLH):
             reg_part = 0.
 
         return H_unreg - reg_part
-
 
 
 class StepLLH(LLH):
