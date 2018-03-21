@@ -1,5 +1,5 @@
 import sys
-import numy as np
+import numpy as np
 import pymc3 as pm
 
 from ..model import LinearModel, Model
