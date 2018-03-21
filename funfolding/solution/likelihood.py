@@ -1,8 +1,13 @@
-import numpy as np
+import sys
+import numy as np
 import pymc3 as pm
 
 from ..model import LinearModel, Model
 import theano
+
+
+if sys.version_info[0] > 2:
+    basestring = str
 
 
 def create_C_thikonov(n_dims,
