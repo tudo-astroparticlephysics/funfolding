@@ -76,8 +76,8 @@ def calc_errors_llh(sample,
     order = np.argsort(probs)
     selected = sample[np.sort(order[:interval]), :]
     sigma_vec_best = np.zeros((2, sample.shape[1]))
-    sigma_vec_best[0, :] = np.max(selected, axis=0)
-    sigma_vec_best[1, :] = np.min(selected, axis=0)
+    sigma_vec_best[0, :] = np.min(selected, axis=0)
+    sigma_vec_best[1, :] = np.max(selected, axis=0)
     if sigma == 'interval_and_limits':
         interval = int(len(probs) * 0.9) + 1
         idx = np.sort(order[:interval])
