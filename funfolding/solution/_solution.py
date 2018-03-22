@@ -13,7 +13,7 @@ except ImportError:
 
 from ..model import LinearModel
 from .error_calculation import calc_feldman_cousins_errors, \
-    calc_feldman_cousins_errors_binned
+    calc_feldman_cousins_errors_binned, calc_errors_llh
 from .likelihood import StandardLLH, StepLLH
 
 
@@ -210,6 +210,7 @@ class LLHSolutionMCMC(Solution):
     status_need_for_fit = 1
 
     def __init__(self,
+                 error_calc='llh_min_max',
                  n_walkers=100,
                  n_used_steps=2000,
                  n_burn_steps=1000,
@@ -219,6 +220,8 @@ class LLHSolutionMCMC(Solution):
         if not isinstance(random_state, np.random.RandomState):
             random_state = np.random.RandomState(random_state)
         self.random_state = random_state
+
+        self.error_calc = error_calc.lower()
 
         self.n_walkers = n_walkers
         self.n_used_steps = n_used_steps
@@ -247,7 +250,7 @@ class LLHSolutionMCMC(Solution):
         if bounds is not None and bounds:
             warnings.warn("'bounds' have no effect or MCMC!")
 
-    def fit(self):
+    def fit(self, error_interval_sigma=1.):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
         pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
@@ -265,9 +268,24 @@ class LLHSolutionMCMC(Solution):
         vec_fit_params, samples, probs = self.__run_mcmc__(sampler,
                                                            pos_x0,
                                                            n_steps)
-        vec_f = vec_fit_params[:, :self.model.dim_f]
-        sigma_vec_f = calc_feldman_cousins_errors(vec_f, samples)
-        return vec_f, sigma_vec_f, samples, probs
+        samples_f = samples[:, :self.model.dim_f]
+        vec_f = vec_fit_params[:self.model.dim_f]
+        if self.error_calc == 'feldmann_unbinned':
+            sigma_vec_f = calc_feldman_cousins_errors(
+                best_fit=vec_f,
+                sample=samples_f,
+                sigma=error_interval_sigma)
+        if self.error_calc == 'feldmann_binned':
+            sigma_vec_f = calc_feldman_cousins_errors_binned(
+                best_fit=vec_f,
+                sample=samples_f,
+                sigma=error_interval_sigma)
+        elif self.error_calc == 'llh_min_max':
+            sigma_vec_f = calc_errors_llh(
+                sample=samples,
+                probs=probs,
+                sigma=error_interval_sigma)
+        return vec_fit_params, sigma_vec_f, samples, probs
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,
@@ -414,11 +432,6 @@ class LLHSolutionPyMC(Solution):
         llh = StandardLLH(tau=tau,
                           log_f=log_f,
                           vec_acceptance=vec_acceptance,
-
-
-
-
-
                           C=C)
         self.llh = llh
         self.vec_g = llh.vec_g
