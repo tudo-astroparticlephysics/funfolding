@@ -446,6 +446,8 @@ class SystematicLLH(StandardLLH):
                 if not callable(p):
                     raise ValueError(
                         'All nuissance_priors have to be callable!')
+        else:
+            self.nuissance_priors = []
 
         self.gradient_defined = False
         self.hessian_matrix_defined = False
