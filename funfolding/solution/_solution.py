@@ -270,21 +270,24 @@ class LLHSolutionMCMC(Solution):
                                                            n_steps)
         samples_f = samples[:, :self.model.dim_f]
         vec_f = vec_fit_params[:self.model.dim_f]
-        if self.error_calc == 'feldmann_unbinned':
-            sigma_vec_f = calc_feldman_cousins_errors(
-                best_fit=vec_f,
-                sample=samples_f,
-                sigma=error_interval_sigma)
-        if self.error_calc == 'feldmann_binned':
-            sigma_vec_f = calc_feldman_cousins_errors_binned(
-                best_fit=vec_f,
-                sample=samples_f,
-                sigma=error_interval_sigma)
-        elif self.error_calc == 'llh_min_max':
-            sigma_vec_f = calc_errors_llh(
-                sample=samples,
-                probs=probs,
-                sigma=error_interval_sigma)
+        try:
+            if self.error_calc == 'feldmann_unbinned':
+                sigma_vec_f = calc_feldman_cousins_errors(
+                    best_fit=vec_f,
+                    sample=samples_f,
+                    sigma=error_interval_sigma)
+            if self.error_calc == 'feldmann_binned':
+                sigma_vec_f = calc_feldman_cousins_errors_binned(
+                    best_fit=vec_f,
+                    sample=samples_f,
+                    sigma=error_interval_sigma)
+            elif self.error_calc == 'llh_min_max':
+                sigma_vec_f = calc_errors_llh(
+                    sample=samples,
+                    probs=probs,
+                    sigma=error_interval_sigma)
+        except:
+            sigma_vec_f = None
         return vec_fit_params, sigma_vec_f, samples, probs
 
     def __initiallize_mcmc__(self):
