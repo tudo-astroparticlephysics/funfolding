@@ -226,12 +226,17 @@ class LLHSolutionMCMC(Solution):
         self.n_threads = n_threads
 
         self.x0 = None
+        self.n_nuissance = None
 
     def initialize(self, model, llh):
         super(LLHSolutionMCMC, self).initialize()
         self.llh = llh
         self.vec_g = llh.vec_g
         self.model = model
+        if hasattr(self.model, 'systematics'):
+            self.n_nuissance = len(self.model.systematics)
+        else:
+            self.n_nuissance = 0
 
     def set_x0_and_bounds(self, x0=None, bounds=False, min_x0=0.5):
         super(LLHSolutionMCMC, self).set_x0_and_bounds()
@@ -245,16 +250,22 @@ class LLHSolutionMCMC(Solution):
     def fit(self):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
-        pos_x0 = np.zeros((self.n_walkers, self.model.dim_f), dtype=float)
-        for i, x0_i in enumerate(self.x0):
+        pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
+
+        for i, x0_i in enumerate(self.x0[:self.model.dim_f]):
             if x0_i < 1.:
                 x0_i += self.min_x0
-            pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walkers)
-        pos_x0[pos_x0 == 0] = self.min_x0
+            pos_x0_i = self.random_state.poisson(x0_i, size=self.n_walkers)
+            pos_x0_i[pos_x0_i == 0] = self.min_x0
+            pos_x0[:, i] = pos_x0_i
+        for i, x0_i in enumerate(self.x0[self.model.dim_f:]):
+            pos_x0[:, self.model.dim_f + i] = x0_i
+
         sampler = self.__initiallize_mcmc__()
-        vec_f, samples, probs = self.__run_mcmc__(sampler,
-                                                  pos_x0,
-                                                  n_steps)
+        vec_fit_params, samples, probs = self.__run_mcmc__(sampler,
+                                                           pos_x0,
+                                                           n_steps)
+        vec_f = vec_fit_params[:, :self.model.dim_f]
         sigma_vec_f = calc_feldman_cousins_errors(vec_f, samples)
         return vec_f, sigma_vec_f, samples, probs
 
