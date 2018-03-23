@@ -647,7 +647,7 @@ class LinearModelSystematics(LinearModel):
                         raise cache_error
                     self.__cache[s.name] = {}
         self.n_nuissance_parameters = len(self.systematics)
-        self.dim_fit_vector = self.dim_f + self.n_nuissance_parameters
+        self.dim_fit_vector = None
 
     def initialize(self,
                    digitized_obs,
@@ -664,6 +664,7 @@ class LinearModelSystematics(LinearModel):
         self._A_unnormed = self.__generate_matrix_A_unnormed()
         self.A = np.dot(self._A_unnormed,
                         np.diag(1 / np.sum(self._A_unnormed, axis=0)))
+        self.dim_fit_vector = self.dim_f + self.n_nuissance_parameters
 
     def __generate_matrix_A_unnormed(self, weight_factors=None):
         if self.sample_weight is None:

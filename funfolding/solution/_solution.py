@@ -208,9 +208,13 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
 class LLHSolutionMCMC(Solution):
     name = 'LLHSolutionMCMC'
     status_need_for_fit = 1
+    available_errors_calcs = (
+        'feldmann_unbinned',
+        'feldmann_unbinned',
+        'llh_min_max')
 
     def __init__(self,
-                 error_calc='feldmann_unbinne',
+                 error_calc='feldmann_unbinned',
                  n_walkers=100,
                  n_used_steps=2000,
                  n_burn_steps=1000,
@@ -221,6 +225,9 @@ class LLHSolutionMCMC(Solution):
             random_state = np.random.RandomState(random_state)
         self.random_state = random_state
 
+        if error_calc.lower() not in self.available_errors_calcs:
+            raise ValueError(
+                '{} invalid setting for error calculatioin'.format(error_calc))
         self.error_calc = error_calc.lower()
 
         self.n_walkers = n_walkers
@@ -270,6 +277,7 @@ class LLHSolutionMCMC(Solution):
                                                            n_steps)
         samples_f = samples[:, :self.model.dim_f]
         vec_f = vec_fit_params[:self.model.dim_f]
+        sigma_vec_f = None
         try:
             if self.error_calc == 'feldmann_unbinned':
                 sigma_vec_f = calc_feldman_cousins_errors(
@@ -287,7 +295,8 @@ class LLHSolutionMCMC(Solution):
                     probs=probs,
                     sigma=error_interval_sigma)
         except:
-            sigma_vec_f = None
+            warnings.warn('Error calculation {} failed'.format(
+                self.error_calc))
         return vec_fit_params, sigma_vec_f, samples, probs
 
     def __initiallize_mcmc__(self):
