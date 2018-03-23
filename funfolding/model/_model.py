@@ -538,6 +538,7 @@ class PolynominalSytematic(object):
                  digitized_obs,
                  sample_weights=None,
                  minlength_vec_g=0):
+        self.baseline_idx = baseline_idx
         self.x = x
         if len(digitized_obs) != len(x):
             raise ValueError('digitized_obs has invalid shape! It needs to '
@@ -702,9 +703,11 @@ class LinearModelSystematics(Model):
         self.digitized_obs = digitized_obs
         self.digitized_truth = digitized_truth
         self.sample_weight = sample_weight
-        self.A = self.__generate_matrix_A()
+        self._A_unnormed = self.__generate_matrix_A_unnormed()
+        self.A = np.dot(self._A_unnormed,
+                        np.diag(1 / np.sum(self._A_unnormed, axis=0)))
 
-    def __generate_matrix_A(self, weight_factors=None):
+    def __generate_matrix_A_unnormed(self, weight_factors=None):
         if self.sample_weight is None:
             weights = weight_factors
         else:
@@ -713,13 +716,11 @@ class LinearModelSystematics(Model):
             else:
                 weights = self.sample_weight
         binning_g, binning_f = self.__generate_binning__()
-        A = np.histogram2d(x=self.digitized_obs,
-                           y=self.digitized_truth,
-                           bins=(binning_g, binning_f),
-                           weights=weights)[0]
-        M_norm = np.diag(1 / np.sum(A, axis=0))
-        A = np.dot(A, M_norm)
-        return A
+        A_unnormed = np.histogram2d(x=self.digitized_obs,
+                                    y=self.digitized_truth,
+                                    bins=(binning_g, binning_f),
+                                    weights=weights)[0]
+        return A_unnormed
 
     def evaluate(self, vec_fit):
         """Evaluating the model for a given vector f
@@ -745,15 +746,16 @@ class LinearModelSystematics(Model):
         super(LinearModelSystematics, self).evaluate()
         vec_f = vec_fit[:self.dim_f]
         nuissance_parameters = vec_fit[self.dim_f:]
-        A = self.A.copy()
+        A = self.self._A_unnormed.copy()
         for s, x_s, c_t in zip(self.systematics,
                                nuissance_parameters,
                                self.cache_precision):
-            factor = self.__get_systematic_factor(s, x_s, c_t)
-            if factor is None:
+            factor_matrix, _ = self.__get_systematic_factor(s, x_s, c_t)
+            if factor_matrix is None:
                 return -1., -1., -1.
-            A *= factor
-
+            A *= factor_matrix
+        M_norm = np.diag(1 / np.sum(A, axis=0))
+        A = np.dot(A, M_norm)
         vec_g = np.dot(A, vec_f)
         if self.has_background:
             vec_g += self.vec_b
@@ -768,70 +770,29 @@ class LinearModelSystematics(Model):
                                     x=x)
         if weight_factors is None:
             return None
-        A = self.__generate_matrix_A(weight_factors=weight_factors)
-        A[A > 0] /= self.A[A > 0]
+        A_syst = self.__generate_matrix_A_unnormed(
+            weight_factors=weight_factors)
+        A_syst[A_syst > 0] /= self._A_unnormed[A_syst > 0]
         if cache_transformation is not None:
-            self.__cache[systematic.name][x] = A
-        return A
+            self.__cache[systematic.name][x] = A_syst
+        return A_syst
 
     def generate_fit_x0(self, vec_g):
-        """Generates a default seed for the minimization.
-        The default seed vec_f_0 is a uniform distribution with
-        sum(vec_f_0) = sum(vec_g). If background is present the default seed
-        is: sum(vec_f_0) = sum(vec_g) - sum(self.vec_b).
+        vec_f_0 = super(LinearModelSystematics, self).generate_fit_x0()
+        vec_x_0 = np.ones(self.dim_f + len(self.systematics))
+        vec_x_0[:self.dim_f] = vec_f_0
 
-        Parameters
-        ----------
-        vec_g : np.array, shape=(dim_g)
-            Observable vector which should be used to get the correct
-            normalization for vec_f_0.
-
-        Returns
-        -------
-        vec_f_0 : np.array, shape=(dim_f)
-            Seed vector of a minimization.
-        """
-        super(LinearModelSystematics, self).generate_fit_x0()
-        n = self.A.shape[1]
-        if self.has_background:
-            vec_f_0 = np.ones(n) * (np.sum(vec_g) - np.sum(self.vec_b)) / n
-        else:
-            vec_f_0 = np.ones(n) * np.sum(vec_g) / n
-        return vec_f_0
+        for i, syst_i in enumerate(self.systematics):
+            vec_x_0[:self.dim_f + i] = syst_i.x[syst_i.baseline_idx]
+        return vec_x_0
 
     def generate_fit_bounds(self, vec_g):
-        """Generates a bounds for a minimization.
-        The bounds are (0, sum(vec_g)) without background and
-        (0, sum(vec_g - self.vec_b)) with background. The bounds are for
-        each fit parameter/entry in f.
-
-        Parameters
-        ----------
-        vec_g : np.array, shape=(dim_g)
-            Observable vector which should be used to get the correct
-            upper bound
-
-        Returns
-        -------
-        bounds : list, shape=(dim_f)
-            List of tuples with the bounds.
-        """
-        super(LinearModel, self).generate_fit_bounds()
-        n = self.A.shape[1]
-        if self.has_background:
-            n_events = np.sum(vec_g) - np.sum(self.vec_b)
-        else:
-            n_events = np.sum(vec_g)
-        bounds = [(0, n_events)] * n
+        bounds = super(LinearModelSystematics, self).generate_fit_bounds()
+        for i, syst_i in enumerate(self.systematics):
+            bounds.append(syst_i.bounds)
         return bounds
 
-    def set_model_x0(self):
-        """The LinearModel has no referenz model_x0.
-        """
-        super(LinearModelSystematics, self).set_model_x0()
-        warnings.warn('\tx0 has no effect for {}'.format(self.name))
-
-    def evaluate_condition(self, normalize=True):
+    def evaluate_condition(self, nuissance_paramers, normalize=True):
         """Returns an ordered array of the singular values of matrix A.
 
         Parameters
@@ -852,67 +813,3 @@ class LinearModelSystematics(Model):
         if normalize:
             S_values = S_values / S_values[0]
         return S_values
-
-    def __generate_binning__(self):
-        if self.status < 0:
-            raise RuntimeError("Model has to be intilized. "
-                               "Run 'model.initialize' first!")
-        binning_obs = np.linspace(self.range_obs[0],
-                                  self.range_obs[1] + 1,
-                                  self.dim_g + 1)
-        binning_truth = np.linspace(self.range_truth[0],
-                                    self.range_truth[1] + 1,
-                                    self.dim_f + 1)
-        return binning_obs, binning_truth
-
-    def generate_vectors(self,
-                         digitized_obs=None,
-                         digitized_truth=None,
-                         obs_weights=None,
-                         truth_weights=None):
-        """Returns vec_g, vec_f for digitized values. Either f, g or both
-        can be provided to the function.
-
-        Parameters
-        ----------
-        digitized_obs : np.intarray (optional)
-            Array with digitized values form the observable space
-
-        digitized_truth : np.intarray (optinal)
-            Array with digitized values for the sought-after quantity.
-
-        Returns
-        -------
-        vec_g : None or np.array shape=(dim_g)
-            None if no digitized_obs was provided otherwise the histrogram
-            of digitized_obs.
-
-        vec_f : None or np.array shape=(dim_f)
-            None if no digitized_truth was provided otherwise the histrogram
-            of digitized_truth.
-        """
-        binning_obs, binning_truth = self.__generate_binning__()
-        if digitized_obs is not None:
-            vec_g = np.histogram(digitized_obs,
-                                 bins=binning_obs,
-                                 weights=obs_weights)[0]
-        else:
-            vec_g = None
-        if digitized_truth is not None:
-            vec_f = np.histogram(digitized_truth,
-                                 bins=binning_truth,
-                                 weights=truth_weights)[0]
-        else:
-            vec_f = None
-        return vec_g, vec_f
-
-    def add_background(self, vec_b):
-        """Adds a background vector to the model.
-
-        Parameters
-        ----------
-        vec_b : numpy.array, shape=(dim_g)
-            Vector g which is added to the model evaluation.
-        """
-        super(LinearModelSystematics, self).add_background()
-        self.vec_b = vec_b
