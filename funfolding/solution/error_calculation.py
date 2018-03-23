@@ -2,10 +2,52 @@ import numpy as np
 from scipy.stats import norm
 
 
+def calc_errors_llh(sample,
+                    probs,
+                    sigma=1.,
+                    sigma_limits=None,
+                    precision_f=0.1,
+                    n_nuissance=0):
+    if sigma_limits is None:
+        sigma_limits = sigma
+    if precision_f is not None:
+        sample = sample.copy()
+        for i in range(sample.shape[1] - n_nuissance):
+            a = sample[:, i] / precision_f
+            sample[:, i] = np.floor((a + 0.5)) * precision_f
+    interval = int(len(probs) * (norm.cdf(sigma) - norm.cdf(-sigma))) + 1
+    interval_limits = int(len(probs) * (norm.cdf(sigma_limits) -
+                          norm.cdf(-sigma_limits))) + 1
+    order = np.argsort(probs)
+    selected = sample[np.sort(order[:interval]), :]
+    sigma_vec_best = np.zeros((2, sample.shape[1]))
+    sigma_vec_best[0, :] = np.min(selected, axis=0)
+    sigma_vec_best[1, :] = np.max(selected, axis=0)
+    if sigma_limits != sigma:
+        idx = np.sort(order[:interval_limits])
+        selected = sample[idx, :]
+        for i, calc_upper_limit in enumerate(sigma_vec_best[0, :] == 0.):
+            if calc_upper_limit:
+                sigma_vec_best[1, i] = np.max(selected[:, i])
+    return sigma_vec_best
+
+
 def calc_feldman_cousins_errors(best_fit,
                                 sample,
-                                sigma=1.):
+                                sigma=1.,
+                                sigma_limits=None,
+                                precision_f=0.1,
+                                n_nuissance=0):
+    if sigma_limits is None:
+        sigma_limits = sigma
+    if precision_f is not None:
+        sample = sample.copy()
+        for i in range(sample.shape[1] - n_nuissance):
+            a = sample[:, i] / precision_f
+            sample[:, i] = np.floor((a + 0.5)) * precision_f
     interval = int(sample.shape[0] * (norm.cdf(sigma) - norm.cdf(-sigma))) + 1
+    interval_limits = int(len(sample.shape[0]) * (norm.cdf(sigma_limits) -
+                          norm.cdf(-sigma_limits))) + 1
     diff = np.absolute(sample - best_fit)
     sigma_vec_best = np.zeros((2, len(best_fit)))
     for i in range(len(best_fit)):
@@ -14,6 +56,11 @@ def calc_feldman_cousins_errors(best_fit,
         selected_sample = sample[select, i]
         sigma_vec_best[0, i] = np.min(selected_sample, axis=0)
         sigma_vec_best[1, i] = np.max(selected_sample, axis=0)
+        if sigma_limits != sigma:
+            if sigma_vec_best[0, i] == 0.:
+                select = order[:interval_limits]
+                selected_sample = sample[select, i]
+                sigma_vec_best[1, i] = np.max(selected_sample, axis=0)
     return sigma_vec_best
 
 
@@ -57,32 +104,4 @@ def calc_feldman_cousins_errors_binned(best_fit,
         if sigma_vec_best[0, i] < 0.:
             sigma_vec_best[0, i] = 0.
         sigma_vec_best[1, i] = np.max(added_bins)
-    return sigma_vec_best
-
-
-def calc_errors_llh(sample,
-                    probs,
-                    sigma=1.,
-                    precision_f=0.1,
-                    n_nuissance=0):
-    if sigma == 'interval_and_limits':
-        sigma = 1.
-    if precision_f is not None:
-        sample = sample.copy()
-        for i in range(sample.shape[1] - n_nuissance):
-            a = sample[:, i] / precision_f
-            sample[:, i] = np.floor((a + 0.5)) * precision_f
-    interval = int(len(probs) * (norm.cdf(sigma) - norm.cdf(-sigma))) + 1
-    order = np.argsort(probs)
-    selected = sample[np.sort(order[:interval]), :]
-    sigma_vec_best = np.zeros((2, sample.shape[1]))
-    sigma_vec_best[0, :] = np.min(selected, axis=0)
-    sigma_vec_best[1, :] = np.max(selected, axis=0)
-    if sigma == 'interval_and_limits':
-        interval = int(len(probs) * 0.9) + 1
-        idx = np.sort(order[:interval])
-        selected = sample[idx, :]
-        for i, calc_upper_limit in enumerate(sigma_vec_best[0, :] == 0.):
-            if calc_upper_limit:
-                sigma_vec_best[1, i] = np.max(selected[:, i])
     return sigma_vec_best
