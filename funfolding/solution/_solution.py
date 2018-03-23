@@ -292,7 +292,7 @@ class LLHSolutionMCMC(Solution):
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,
-                                     dim=self.model.dim_f,
+                                     dim=self.model.dim_fit_vector,
                                      lnpostfn=self.llh,
                                      threads=self.n_threads)
 
@@ -302,7 +302,7 @@ class LLHSolutionMCMC(Solution):
                          rstate0=self.random_state.get_state())
 
         samples = sampler.chain[:, self.n_burn_steps:, :]
-        samples = samples.reshape((-1, self.model.dim_f))
+        samples = samples.reshape((-1, self.model.dim_fit_vector))
 
         probs = sampler.lnprobability[:, self.n_burn_steps:]
 

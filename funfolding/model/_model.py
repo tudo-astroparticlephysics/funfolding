@@ -140,6 +140,7 @@ class LinearModel(Model):
         self.dim_f = None
         self.dim_g = None
         self.vec_b = None
+        self.dim_fit_vector = self.dim_f
 
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
         """
@@ -391,6 +392,7 @@ class BiasedLinearModel(LinearModel):
         self.model_factor_ = 1.
         self.background_factor_ = 0.
         self.vec_b = None
+        self.dim_fit_vector = self.dim_f
 
     def evaluate(self, vec_fit):
         """Evaluating the model for a given vector f
@@ -609,50 +611,7 @@ class FloatCacheTransformation(object):
 class LinearModelSystematics(LinearModel):
     name = 'LinearModelSystematics'
     status_need_for_eval = 0
-    """ Linear model with systematic support:
-    g = A(syst) * f
 
-    Attributes
-    ----------
-    name : str
-        Name of the model.
-
-    status : int
-        Indicates the status of the model:
-            -1 : Instance created. Not filled with values yet.
-             0 : Filled with values
-
-    dim_g :
-        Dimension of the histogrammed observable vector.
-
-    dim_f :
-        Dimension of the histogrammed truth vector.
-
-    range_obs : tuple (int, int)
-        Tuple containing the lowest and highest bin number used in
-        the digitized observable vector. For performance reasons it is
-        assumed that all numbers between min and max are used.
-
-    range_truth : tuple (int, int)
-        Tuple containing the lowest and highest bin number used in
-        the digitized truth vector. For performance reasons it is
-        assumed that all numbers between min and max are used.
-
-    A : numpy.array shape=(dim_g, dim_f)
-        Response matrix.
-
-    vec_b : numpy.array, shape=(dim_f)
-        Observable vector for the background.
-
-    has_background : boolean
-        Indicator if self.vec_b should be added to the model evaluationg
-
-
-        Parameters
-        ----------
-        vec_fit : numpy.array, shape=(dim_f,)
-            Vector f for which the model should be evaluated.
-    """
     def __init__(self, systematics=[], cache_precision=[]):
         super(LinearModelSystematics, self).__init__()
         self.range_obs = None
@@ -687,15 +646,14 @@ class LinearModelSystematics(LinearModel):
                     else:
                         raise cache_error
                     self.__cache[s.name] = {}
+        self.n_nuissance_parameters = len(self.systematics)
+        self.dim_fit_vector = self.dim_f + self.n_nuissance_parameters
 
     def initialize(self,
                    digitized_obs,
                    digitized_truth,
                    sample_weight=None):
-        """
-
-        """
-        super(LinearModelSystematics, self).initialize()
+        super(LinearModel, self).initialize()
         self.range_obs = (min(digitized_obs), max(digitized_obs))
         self.range_truth = (min(digitized_truth), max(digitized_truth))
         self.dim_f = self.range_truth[1] - self.range_truth[0] + 1
@@ -723,34 +681,13 @@ class LinearModelSystematics(LinearModel):
         return A_unnormed
 
     def evaluate(self, vec_fit):
-        """Evaluating the model for a given vector f
-
-        Parameters
-        ----------
-        vec_fit : numpy.array, shape=(dim_f,)
-            Vector f for which the model should be evaluated.
-
-        Returns
-        -------
-        vec_g : nump.array, shape=(dim_g,)
-            Vector containing the number of events in observable space.
-            If background was adde d the returned vector is A * vec_f + vec_b.
-
-        vec_f : nump.array, shape=(dim_f,)
-            Vector used to evaluate A * vec_f
-
-        vec_f_reg : nump.array, shape=(dim_f,)
-            Vector that should be passed to the regularization. For the
-            BasisLinearModel it is identical to f.
-        """
-        super(LinearModel, self).evaluate()
         vec_f = vec_fit[:self.dim_f]
         nuissance_parameters = vec_fit[self.dim_f:]
-        A = self.self._A_unnormed.copy()
+        A = self._A_unnormed.copy()
         for s, x_s, c_t in zip(self.systematics,
                                nuissance_parameters,
                                self.cache_precision):
-            factor_matrix, _ = self.__get_systematic_factor(s, x_s, c_t)
+            factor_matrix = self.__get_systematic_factor(s, x_s, c_t)
             if factor_matrix is None:
                 return -1., -1., -1.
             A *= factor_matrix
@@ -778,12 +715,12 @@ class LinearModelSystematics(LinearModel):
         return A_syst
 
     def generate_fit_x0(self, vec_g):
-        vec_f_0 = super(LinearModelSystematics, self).generate_fit_x0()
-        vec_x_0 = np.ones(self.dim_f + len(self.systematics))
+        vec_f_0 = super(LinearModelSystematics, self).generate_fit_x0(vec_g)
+        vec_x_0 = np.ones(self.dim_fit_vector)
         vec_x_0[:self.dim_f] = vec_f_0
 
         for i, syst_i in enumerate(self.systematics):
-            vec_x_0[:self.dim_f + i] = syst_i.x[syst_i.baseline_idx]
+            vec_x_0[self.dim_f + i] = syst_i.x[syst_i.baseline_idx]
         return vec_x_0
 
     def generate_fit_bounds(self, vec_g):
@@ -811,7 +748,7 @@ class LinearModelSystematics(LinearModel):
             for s, x_s, c_t in zip(self.systematics,
                                    nuissance_parameters,
                                    self.cache_precision):
-                factor_matrix, _ = self.__get_systematic_factor(s, x_s, c_t)
+                factor_matrix = self.__get_systematic_factor(s, x_s, c_t)
                 if factor_matrix is None:
                     return -1., -1., -1.
                 A *= factor_matrix
