@@ -210,7 +210,7 @@ class LLHSolutionMCMC(Solution):
     status_need_for_fit = 1
 
     def __init__(self,
-                 error_calc='llh_min_max',
+                 error_calc='feldmann_unbinned',
                  n_walkers=100,
                  n_used_steps=2000,
                  n_burn_steps=1000,
