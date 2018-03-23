@@ -606,7 +606,7 @@ class FloatCacheTransformation(object):
         return np.floor((a + 0.5)) * self.value + self.offset
 
 
-class LinearModelSystematics(Model):
+class LinearModelSystematics(LinearModel):
     name = 'LinearModelSystematics'
     status_need_for_eval = 0
     """ Linear model with systematic support:
@@ -743,7 +743,7 @@ class LinearModelSystematics(Model):
             Vector that should be passed to the regularization. For the
             BasisLinearModel it is identical to f.
         """
-        super(LinearModelSystematics, self).evaluate()
+        super(LinearModel, self).evaluate()
         vec_f = vec_fit[:self.dim_f]
         nuissance_parameters = vec_fit[self.dim_f:]
         A = self.self._A_unnormed.copy()
@@ -792,7 +792,7 @@ class LinearModelSystematics(Model):
             bounds.append(syst_i.bounds)
         return bounds
 
-    def evaluate_condition(self, nuissance_paramers, normalize=True):
+    def evaluate_condition(self, nuissance_parameters=None, normalize=True):
         """Returns an ordered array of the singular values of matrix A.
 
         Parameters
@@ -806,10 +806,23 @@ class LinearModelSystematics(Model):
         S_values : np.array, shape=(dim_f)
             Ordered array of the singular values.
         """
+        if nuissance_parameters is not None:
+            A = self.self._A_unnormed.copy()
+            for s, x_s, c_t in zip(self.systematics,
+                                   nuissance_parameters,
+                                   self.cache_precision):
+                factor_matrix, _ = self.__get_systematic_factor(s, x_s, c_t)
+                if factor_matrix is None:
+                    return -1., -1., -1.
+                A *= factor_matrix
+            M_norm = np.diag(1 / np.sum(A, axis=0))
+            A = np.dot(A, M_norm)
+        else:
+            A = self.A
         if self.status < 0:
             raise RuntimeError("Model has to be intilized. "
                                "Run 'model.initialize' first!")
-        U, S_values, V = linalg.svd(self.A)
+        U, S_values, V = linalg.svd(A)
         if normalize:
             S_values = S_values / S_values[0]
         return S_values
