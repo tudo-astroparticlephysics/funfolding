@@ -257,7 +257,7 @@ class LLHSolutionMCMC(Solution):
         if bounds is not None and bounds:
             warnings.warn("'bounds' have no effect or MCMC!")
 
-    def fit(self, error_interval_sigma=1.):
+    def fit(self, error_interval_sigma=1., error_interval_sigma_limits=1.):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
         pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
@@ -269,34 +269,36 @@ class LLHSolutionMCMC(Solution):
             pos_x0_i[pos_x0_i == 0] = self.min_x0
             pos_x0[:, i] = pos_x0_i
         for i, x0_i in enumerate(self.x0[self.model.dim_f:]):
-            pos_x0[:, self.model.dim_f + i] = x0_i
+            if hasattr(self.model, 'systematics'):
+                syst_i = self.model.systematics[i]
+                pos_x0_i = syst_i.sample_from_prior(size=self.n_walkers)
+            else:
+                pos_x0_i = x0_i
+            pos_x0[:, self.model.dim_f + i] = pos_x0_i
 
         sampler = self.__initiallize_mcmc__()
         vec_fit_params, samples, probs = self.__run_mcmc__(sampler,
                                                            pos_x0,
                                                            n_steps)
-        samples_f = samples[:, :self.model.dim_f]
-        vec_f = vec_fit_params[:self.model.dim_f]
         sigma_vec_f = None
-        try:
-            if self.error_calc == 'feldmann_unbinned':
-                sigma_vec_f = calc_feldman_cousins_errors(
-                    best_fit=vec_f,
-                    sample=samples_f,
-                    sigma=error_interval_sigma)
-            if self.error_calc == 'feldmann_binned':
-                sigma_vec_f = calc_feldman_cousins_errors_binned(
-                    best_fit=vec_f,
-                    sample=samples_f,
-                    sigma=error_interval_sigma)
-            elif self.error_calc == 'llh_min_max':
-                sigma_vec_f = calc_errors_llh(
-                    sample=samples,
-                    probs=probs,
-                    sigma=error_interval_sigma)
-        except:
-            warnings.warn('Error calculation {} failed'.format(
-                self.error_calc))
+        if self.error_calc == 'feldmann_unbinned':
+            sigma_vec_f = calc_feldman_cousins_errors(
+                best_fit=vec_fit_params,
+                sample=samples,
+                sigma=error_interval_sigma,
+                sigma_limits=error_interval_sigma_limits)
+        if self.error_calc == 'feldmann_binned':
+            sigma_vec_f = calc_feldman_cousins_errors_binned(
+                best_fit=vec_fit_params,
+                sample=samples,
+                sigma=error_interval_sigma,
+                sigma_limits=error_interval_sigma_limits)
+        elif self.error_calc == 'llh_min_max':
+            sigma_vec_f = calc_errors_llh(
+                sample=samples,
+                probs=probs,
+                sigma=error_interval_sigma,
+                sigma_limits=error_interval_sigma_limits)
         return vec_fit_params, sigma_vec_f, samples, probs
 
     def __initiallize_mcmc__(self):

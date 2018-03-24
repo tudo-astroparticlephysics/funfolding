@@ -1,6 +1,7 @@
 import warnings
 import numpy as np
 from scipy import linalg
+from scipy import stats
 
 
 class Model(object):
@@ -140,7 +141,7 @@ class LinearModel(Model):
         self.dim_f = None
         self.dim_g = None
         self.vec_b = None
-        self.dim_fit_vector = self.dim_f
+        self.dim_fit_vector = None
 
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
         """
@@ -158,6 +159,7 @@ class LinearModel(Model):
                                 weights=sample_weight)[0]
         M_norm = np.diag(1 / np.sum(self.A, axis=0))
         self.A = np.dot(self.A, M_norm)
+        self.dim_fit_vector = self.dim_f
 
     def evaluate(self, vec_fit):
         """Evaluating the model for a given vector f
@@ -522,17 +524,58 @@ class PolynominalSytematic(object):
     def __init__(self,
                  name,
                  degree,
+                 prior=None,
                  bounds=None):
         self.name = name
         self.degree = degree
         if bounds is None:
-            self.bounds = None
+            self.bounds = lambda x: True
         elif len(bounds) == 2:
-            self.bounds = np.array(bounds, dtype=float)
+            scale = bounds[1] - bounds[0]
+            uniform_prior = stats.uniform(loc=bounds[0], scale=scale)
+            self.bounds = lambda x: uniform_prior.pdf(x) > 0
         else:
             raise ValueError('bounds can be None or array-type with length 2')
         self.x = None
         self.coeffs = None
+        if prior is None:
+            prior_pdf = lambda x: 1.
+        elif hasattr(prior, 'pdf'):
+            prior_pdf = prior.pdf
+        elif callable(prior):
+            prior_pdf = prior
+        else:
+            raise TypeError('The provided prior has to be None, '
+                            'scipy.stats frozen rv or callable!')
+        self.prior = prior
+        self.prior_pdf = prior_pdf
+
+    def lnprob_prior(self, x):
+        if self.bounds(x):
+            return np.log(self.prior_pdf(x))
+        else:
+            return np.inf * -1
+
+    def sample_from_prior(self, size, sample_func_name=None):
+        if hasattr(self.prior, 'rvs'):
+            if self.bounds is None:
+                samples = self.prior.rvs(size)
+            else:
+                samples = np.zeros(size, dtype=float)
+                pointer = 0
+                while pointer < size:
+                    r = self.prior.rvs()
+                    if self.bounds(r):
+                        samples[pointer] = r
+                        pointer += 1
+        elif sample_func_name is not None:
+            f = getattr(self.prior, sample_func_name)
+            samples = f(size)
+        else:
+            raise TypeError(
+                'Provided prior has neither a function called \'rvs\' nor '
+                '\'sample_func_name\' was passed to the function!')
+        return samples
 
     def add_data(self,
                  x,
@@ -578,9 +621,8 @@ class PolynominalSytematic(object):
             self.coeffs[i, :] = c
 
     def evaluate(self, baseline_digitized, x):
-        if self.bounds is not None:
-            if x > self.bounds[1] or x < self.bounds[0]:
-                return None
+        if not self.bounds(x):
+            return None
         factors = np.zeros(self.coeffs.shape[0], dtype=float)
         for i in range(self.degree + 1)[::-1]:
             factors += x**i * self.coeffs[:, i]
@@ -690,7 +732,7 @@ class LinearModelSystematics(LinearModel):
                                self.cache_precision):
             factor_matrix = self.__get_systematic_factor(s, x_s, c_t)
             if factor_matrix is None:
-                return -1., -1., -1.
+                return [-1.], [-1.],  [-1.]
             A *= factor_matrix
         M_norm = np.diag(1 / np.sum(A, axis=0))
         A = np.dot(A, M_norm)

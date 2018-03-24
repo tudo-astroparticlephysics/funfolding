@@ -2,6 +2,9 @@ from . import binning
 from . import model
 from . import solution
 from . import pipeline
-from . import visualization
+try:
+    from . import visualization
+except ImportError:
+    pass
 
 __all__ = ('binning', 'model', 'solution', 'pipeline', 'visualization')
