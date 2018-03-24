@@ -417,15 +417,13 @@ class SystematicLLH(StandardLLH):
                  C='thikonov',
                  reg_factor_f=None,
                  log_f=False,
-                 log_f_offset=1,
-                 nuissance_priors=None):
+                 log_f_offset=1):
         super(SystematicLLH, self).__init__(
             tau=tau,
             C=C,
             reg_factor_f=reg_factor_f,
             log_f=log_f)
         self.log_f_offset = log_f_offset
-        self.nuissance_priors = nuissance_priors
 
     def initialize(self,
                    vec_g,
@@ -438,25 +436,18 @@ class SystematicLLH(StandardLLH):
             ignore_n_bins_high=ignore_n_bins_high,
             ignore_n_bins_low=ignore_n_bins_low)
 
-        self._priors = []
-        if self.nuissance_priors is not None:
-            if not isinstance(self.nuissance_priors, list):
-                self.nuissance_priors = [self.nuissance_priors]
-            for p in self.nuissance_priors:
-                if not callable(p):
-                    raise ValueError(
-                        'All nuissance_priors have to be callable!')
-        else:
-            self.nuissance_priors = []
-
         self.gradient_defined = False
         self.hessian_matrix_defined = False
 
     def evaluate_llh(self, fit_params):
         super(StandardLLH, self).evaluate_llh()
         g_est, f, f_reg = self.model.evaluate(fit_params)
-        if any(g_est < 0) or any(f < 0):
-            return np.inf * -1
+        try:
+            if any(g_est < 0) or any(f < 0):
+                return np.inf * -1
+        except TypeError:
+            print(g_est, f, f_reg)
+            raise TypeError
         poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
         if self._tau is not None:
             f_reg = f_reg[self._f_slice]
@@ -472,9 +463,9 @@ class SystematicLLH(StandardLLH):
         else:
             reg_part = 0
         p = poisson_part - reg_part
-        for i, prior in self.nuissance_priors:
-            idx = self.model.dim_f + 1
-            p += prior(fit_params(fit_params[idx]))
+        for i, prior in enumerate(self.model.systematics):
+            idx = self.model.dim_f + i
+            p += self.model.systematics.ln_prob(fit_params[idx])
         return p
 
     def evaluate_gradient(self, f):

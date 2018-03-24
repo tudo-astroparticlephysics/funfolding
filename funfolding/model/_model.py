@@ -732,7 +732,7 @@ class LinearModelSystematics(LinearModel):
                                self.cache_precision):
             factor_matrix = self.__get_systematic_factor(s, x_s, c_t)
             if factor_matrix is None:
-                return [-1.], [-1.],  [-1.]
+                return np.array([-1.]), np.array([-1.]),  np.array([-1.])
             A *= factor_matrix
         M_norm = np.diag(1 / np.sum(A, axis=0))
         A = np.dot(A, M_norm)
