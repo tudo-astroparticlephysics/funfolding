@@ -87,12 +87,14 @@ class StandardLLH(LLH):
                  tau=None,
                  C='thikonov',
                  reg_factor_f=None,
-                 log_f=False):
+                 log_f=False,
+                 log_f_offset=1):
         super(StandardLLH, self).__init__()
         self.C = C
         self.tau = tau
         self.log_f_reg = log_f
         self.reg_factor_f = reg_factor_f
+        self.log_f_offset = log_f_offset
 
     def initialize(self,
                    vec_g,
@@ -171,7 +173,8 @@ class StandardLLH(LLH):
         if self._tau is not None:
             f_reg = f_reg[self._f_slice]
             if self.log_f_reg:
-                f_reg_used = np.log10((f_reg + 1) * self.reg_factor_f)
+                f_reg_used = np.log10((f_reg + self.log_f_offset) *
+                                      self.reg_factor_f)
             else:
                 f_reg_used = f_reg * self.reg_factor_f
             reg_part = 0.5 * np.dot(
@@ -231,7 +234,7 @@ class StandardLLH(LLH):
         if self._tau is not None:
             if self.log_f_reg:
                 reg_part = np.zeros(self.model.dim_f)
-                denom_f = f_reg + 1
+                denom_f = f_reg + self.log_f_offset
                 nom_f = np.log(denom_f * self.reg_factor_f)
                 ln_10_squared = np.log(10)**2
                 pre = np.zeros((self.model.dim_f,
@@ -241,8 +244,8 @@ class StandardLLH(LLH):
                         pre[i, j] = self._C[i, j] * nom_f[i]
                         pre[i, j] /= ln_10_squared * denom_f[i]
                 for i in range(self.model.dim_f):
-                    reg_part_i = np.sum(pre[i, :])
-                    reg_part_i += np.sum(pre[:, i])
+                    reg_part[i] = np.sum(pre[i, :])
+                    reg_part[i] += np.sum(pre[:, i])
             else:
                 reg_part = np.dot(self._C, f_reg * self.reg_factor_f)
         else:
@@ -257,24 +260,17 @@ class StandardLLH(LLH):
                           self.model.A)
         if self._tau is not None:
             if self.log_f_reg:
-                pre = np.dot(np.dot(np.diag(f_reg + 1), self._C),
-                             np.diag(f_reg + 1)) / np.log(10)**2
-                ln_f_used = np.log((f_reg + 1) * self.reg_factor_f)
-                pre_diag_1 = np.dot(pre, np.diag(ln_f_used))
-                pre_diag_2 = np.dot(np.diag(ln_f_used), pre)
-                reg_part = np.zeros_like(pre)
-                for i in range(self.model.dim_f):
-                    for j in range(i + 1):
-                        r = pre[i, j] + pre[j, i]
-                        if i == j:
-                            r += np.sum(pre_diag_1[i, :])
-                            r += np.sum(pre_diag_2[i, :])
-                            reg_part[i, j] = r
-                        else:
-                            reg_part[i, j] = r
-                            reg_part[j, i] = r
+                reg_part = self._C + self._C.T
+                f_reg = f_reg + self.log_f_offset
+                ln_f_reg_used = np.log(f_reg * self.reg_factor_f)
+                pre_diag = np.sum(np.dot(reg_part, np.diag(ln_f_reg_used)),
+                                  axis=1)
+                reg_part -= np.diag(pre_diag)
+                denom = np.outer(f_reg, f_reg) * np.log(10)**2
+                reg_part /= denom
             else:
                 reg_part = self._C
+            reg_part /= denom
         else:
             reg_part = 0.
 
@@ -463,9 +459,9 @@ class SystematicLLH(StandardLLH):
         else:
             reg_part = 0
         p = poisson_part - reg_part
-        for i, prior in enumerate(self.model.systematics):
+        for i, syst_i in enumerate(self.model.systematics):
             idx = self.model.dim_f + i
-            p += self.model.systematics.ln_prob(fit_params[idx])
+            p += syst_i.lnprob_prior(fit_params[idx])
         return p
 
     def evaluate_gradient(self, f):

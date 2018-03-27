@@ -621,12 +621,16 @@ class PolynominalSytematic(object):
             self.coeffs[i, :] = c
 
     def evaluate(self, baseline_digitized, x):
+        factors = self.get_bin_factors(x)
+        return factors[baseline_digitized]
+
+    def get_bin_factors(self, x):
         if not self.bounds(x):
             return None
         factors = np.zeros(self.coeffs.shape[0], dtype=float)
         for i in range(self.degree + 1)[::-1]:
             factors += x**i * self.coeffs[:, i]
-        return factors[baseline_digitized]
+        return factors
 
     def __call__(self, baseline_digitized, x):
         return self.evaluate(baseline_digitized, x)
@@ -665,8 +669,12 @@ class LinearModelSystematics(LinearModel):
         if systematics is None:
             systematics = []
         self.systematics = systematics
-        if cache_precision is None and len(systematics) > 0:
-            cache_precision = [None] * len(systematics)
+        if isinstance(cache_precision, list) or \
+                isinstance(cache_precision, tuple):
+            if len(cache_precision) == 0:
+                cache_precision = None
+        if cache_precision is None and len(self.systematics) > 0:
+            cache_precision = [None] * len(self.systematics)
         self.cache_precision = cache_precision
         if cache_precision is not None:
             self.__cache = {}
@@ -723,14 +731,14 @@ class LinearModelSystematics(LinearModel):
                                     weights=weights)[0]
         return A_unnormed
 
-    def evaluate(self, vec_fit):
+    def evaluate_old(self, vec_fit):
         vec_f = vec_fit[:self.dim_f]
         nuissance_parameters = vec_fit[self.dim_f:]
         A = self._A_unnormed.copy()
         for s, x_s, c_t in zip(self.systematics,
                                nuissance_parameters,
                                self.cache_precision):
-            factor_matrix = self.__get_systematic_factor(s, x_s, c_t)
+            factor_matrix = self.__get_systematic_event_factors(s, x_s, c_t)
             if factor_matrix is None:
                 return np.array([-1.]), np.array([-1.]),  np.array([-1.])
             A *= factor_matrix
@@ -741,7 +749,28 @@ class LinearModelSystematics(LinearModel):
             vec_g += self.vec_b
         return vec_g, vec_fit, vec_fit
 
-    def __get_systematic_factor(self, systematic, x, cache_transformation):
+    def evaluate(self, vec_fit):
+        vec_f = vec_fit[:self.dim_f]
+        nuissance_parameters = vec_fit[self.dim_f:]
+        A = self._A_unnormed.copy()
+        for s, x_s, c_t in zip(self.systematics,
+                               nuissance_parameters,
+                               self.cache_precision):
+            factor_vector = self.__get_systematic_factors(s, x_s, c_t)
+            if factor_vector is None:
+                return np.array([-1.]), np.array([-1.]),  np.array([-1.])
+            A *= factor_vector[:, np.newaxis]
+        M_norm = np.diag(1 / np.sum(A, axis=0))
+        A = np.dot(A, M_norm)
+        vec_g = np.dot(A, vec_f)
+        if self.has_background:
+            vec_g += self.vec_b
+        return vec_g, vec_fit, vec_fit
+
+    def __get_systematic_event_factors(self,
+                                       systematic,
+                                       x,
+                                       cache_transformation):
         if cache_transformation is not None:
             x = cache_transformation(x)
             if x in self.__cache[systematic.name].keys():
@@ -756,6 +785,18 @@ class LinearModelSystematics(LinearModel):
         if cache_transformation is not None:
             self.__cache[systematic.name][x] = A_syst
         return A_syst
+
+    def __get_systematic_factors(self, systematic, x, cache_transformation):
+        if cache_transformation is not None:
+            x = cache_transformation(x)
+            if x in self.__cache[systematic.name].keys():
+                return self.__cache[systematic.name][x]
+        weight_factors = systematic.get_bin_factors(x=x)
+        if weight_factors is None:
+            return None
+        if cache_transformation is not None:
+            self.__cache[systematic.name][x] = weight_factors
+        return weight_factors
 
     def generate_fit_x0(self, vec_g):
         vec_f_0 = super(LinearModelSystematics, self).generate_fit_x0(vec_g)
