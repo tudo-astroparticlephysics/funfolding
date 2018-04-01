@@ -539,7 +539,9 @@ class PolynominalSytematic(object):
         self.x = None
         self.coeffs = None
         if prior is None:
-            prior_pdf = lambda x: 1.
+            def prior_pdf(x):
+                return 1.
+
         elif hasattr(prior, 'pdf'):
             prior_pdf = prior.pdf
         elif callable(prior):
