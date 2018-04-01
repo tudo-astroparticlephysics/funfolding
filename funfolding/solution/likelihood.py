@@ -459,9 +459,13 @@ class SystematicLLH(StandardLLH):
         else:
             reg_part = 0
         p = poisson_part - reg_part
-        for i, syst_i in enumerate(self.model.systematics):
-            idx = self.model.dim_f + i
-            p += syst_i.lnprob_prior(fit_params[idx])
+        fit_params_pointer = 0
+        for (_, lnprob_prior, n_parameters) in self.model.__x0_distributions:
+            if lnprob_prior is not None:
+                fit_params_slice = slice(fit_params_pointer,
+                                         fit_params_pointer + n_parameters)
+                p += lnprob_prior(fit_params[fit_params_slice])
+            fit_params_pointer += n_parameters
         return p
 
     def evaluate_gradient(self, f):
