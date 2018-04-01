@@ -1,4 +1,5 @@
 import warnings
+import sys
 
 import numpy as np
 from scipy import linalg
@@ -15,6 +16,10 @@ from ..model import LinearModel
 from .error_calculation import calc_feldman_cousins_errors, \
     calc_feldman_cousins_errors_binned, calc_errors_llh
 from .likelihood import StandardLLH, StepLLH
+
+
+if sys.version_info[0] > 2:
+    basestring = str
 
 
 class Solution(object):
@@ -260,22 +265,32 @@ class LLHSolutionMCMC(Solution):
     def fit(self, error_interval_sigma=1., error_interval_sigma_limits=1.):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
+
         pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
-
-        for i, x0_i in enumerate(self.x0[:self.model.dim_f]):
-            if x0_i < 1.:
-                x0_i += self.min_x0
-            pos_x0_i = self.random_state.poisson(x0_i, size=self.n_walkers)
-            pos_x0_i[pos_x0_i == 0] = self.min_x0
-            pos_x0[:, i] = pos_x0_i
-        for i, x0_i in enumerate(self.x0[self.model.dim_f:]):
-            if hasattr(self.model, 'systematics'):
-                syst_i = self.model.systematics[i]
-                pos_x0_i = syst_i.sample_from_prior(size=self.n_walkers)
-            else:
+        x0_pointer = 0
+        for (sample_x0, _, n_parameters) in self.model.__x0_distributions:
+            x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
+            x0_i = self.x0[x0_slice]
+            if sample_x0 is None:
                 pos_x0_i = x0_i
-            pos_x0[:, self.model.dim_f + i] = pos_x0_i
-
+            elif isinstance(sample_x0, basestring):
+                if sample_x0 == 'poisson':
+                    if x0_i < 1.:
+                        x0_i += self.min_x0
+                    pos_x0_i = self.random_state.poisson(x0_i,
+                                                         size=self.n_walkers)
+                    pos_x0_i[pos_x0_i == 0] = self.min_x0
+                else:
+                    raise ValueError(
+                        'Only "poisson" as name for x0 sample'
+                        'dist is implemented')
+            elif callable(sample_x0):
+                try:
+                    pos_x0_i = sample_x0(size=self.n_walkers)
+                except TypeError:
+                    pos_x0_i = x0_i
+            pos_x0[:, x0_slice] = pos_x0_i
+            x0_pointer += n_parameters
         sampler = self.__initiallize_mcmc__()
         vec_fit_params, samples, probs = self.__run_mcmc__(sampler,
                                                            pos_x0,

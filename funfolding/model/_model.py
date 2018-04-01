@@ -4,6 +4,7 @@ from scipy import linalg
 from scipy import stats
 from numpy.linalg import svd
 
+
 class Model(object):
     name = 'Model'
     status_need_for_eval = 0
@@ -142,6 +143,7 @@ class LinearModel(Model):
         self.dim_g = None
         self.vec_b = None
         self.dim_fit_vector = None
+        self.__x0_distributions = None
 
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
         """
@@ -160,6 +162,7 @@ class LinearModel(Model):
         M_norm = np.diag(1 / np.sum(self.A, axis=0))
         self.A = np.dot(self.A, M_norm)
         self.dim_fit_vector = self.dim_f
+        self.__x0_distributions = [('poisson', None, 1)] * self.dim_f
 
     def evaluate(self, vec_fit):
         """Evaluating the model for a given vector f
@@ -394,7 +397,8 @@ class BiasedLinearModel(LinearModel):
         self.model_factor_ = 1.
         self.background_factor_ = 0.
         self.vec_b = None
-        self.dim_fit_vector = self.dim_f
+        self.n_nuissance_parameters = 0
+        self.dim_fit_vector = None
 
     def evaluate(self, vec_fit):
         """Evaluating the model for a given vector f
@@ -541,7 +545,9 @@ class PolynominalSytematic(object):
         self.x = None
         self.coeffs = None
         if prior is None:
-            prior_pdf = lambda x: 1.
+            def prior_pdf(x):
+                return 1.
+
         elif hasattr(prior, 'pdf'):
             prior_pdf = prior.pdf
         elif callable(prior):
@@ -558,7 +564,7 @@ class PolynominalSytematic(object):
         else:
             return np.inf * -1
 
-    def sample_from_prior(self, size, sample_func_name=None):
+    def sample(self, size, sample_func_name=None):
         if hasattr(self.prior, 'rvs'):
             if self.bounds is None:
                 samples = self.prior.rvs(size)
@@ -654,9 +660,9 @@ def plane_fit(points):
         "There are only {} points in {} dimensions.".format(points.shape[1],
                                                             points.shape[0])
     ctr = points.mean(axis=1)
-    x = points - ctr[:,np.newaxis]
-    M = np.dot(x, x.T) # Could also use np.cov(x) here.
-    return ctr, svd(M)[0][:,-1]
+    x = points - ctr[:, np.newaxis]
+    M = np.dot(x, x.T)  # Could also use np.cov(x) here.
+    return ctr, svd(M)[0][:, -1]
 
 
 def plane_fit_least_squares(points):
@@ -690,7 +696,8 @@ class PlaneSytematic(object):
         self.x = None
         self.coeffs = None
         if prior is None:
-            prior_pdf = lambda x: 1.
+            def prior_pdf(x):
+                return 1.
         elif hasattr(prior, 'pdf'):
             prior_pdf = prior.pdf
         elif callable(prior):
@@ -707,7 +714,7 @@ class PlaneSytematic(object):
         else:
             return np.inf * -1
 
-    def sample_from_prior(self, size, sample_func_name=None):
+    def sample(self, size, sample_func_name=None):
         if hasattr(self.prior, 'rvs'):
             if self.bounds is None:
                 samples = self.prior.rvs(size)
@@ -791,7 +798,6 @@ class PlaneSytematic(object):
         return self.evaluate(baseline_digitized, x)
 
 
-
 class ArrayCacheTransformation(object):
     def __init__(self, array):
         self.array = array
@@ -852,8 +858,10 @@ class LinearModelSystematics(LinearModel):
                     else:
                         raise cache_error
                     self.__cache[s.name] = {}
-        self.n_nuissance_parameters = len(self.systematics)
+        self.n_nuissance_parameters = sum(s.n_parameters
+                                          for s in self.systematics)
         self.dim_fit_vector = None
+        self.__x0_distributions = None
 
     def initialize(self,
                    digitized_obs,
@@ -871,6 +879,9 @@ class LinearModelSystematics(LinearModel):
         self.A = np.dot(self._A_unnormed,
                         np.diag(1 / np.sum(self._A_unnormed, axis=0)))
         self.dim_fit_vector = self.dim_f + self.n_nuissance_parameters
+        self.__x0_distributions = [('poisson', None, 1)] * self.dim_f
+        self.__x0_distributions += [(s.sample, s.lnprob_prior, 2)
+                                    for s in self.systematics]
 
     def __generate_matrix_A_unnormed(self, weight_factors=None):
         if self.sample_weight is None:
@@ -896,7 +907,7 @@ class LinearModelSystematics(LinearModel):
                                self.cache_precision):
             factor_matrix = self.__get_systematic_event_factors(s, x_s, c_t)
             if factor_matrix is None:
-                return np.array([-1.]), np.array([-1.]),  np.array([-1.])
+                return np.array([-1.]), np.array([-1.]), np.array([-1.])
             A *= factor_matrix
         M_norm = np.diag(1 / np.sum(A, axis=0))
         A = np.dot(A, M_norm)
@@ -914,7 +925,7 @@ class LinearModelSystematics(LinearModel):
                                self.cache_precision):
             factor_vector = self.__get_systematic_factors(s, x_s, c_t)
             if factor_vector is None:
-                return np.array([-1.]), np.array([-1.]),  np.array([-1.])
+                return np.array([-1.]), np.array([-1.]), np.array([-1.])
             A *= factor_vector[:, np.newaxis]
         M_norm = np.diag(1 / np.sum(A, axis=0))
         A = np.dot(A, M_norm)
