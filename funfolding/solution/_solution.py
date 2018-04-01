@@ -1,4 +1,5 @@
 import warnings
+import sys
 
 import numpy as np
 from scipy import linalg
@@ -15,6 +16,10 @@ from ..model import LinearModel
 from .error_calculation import calc_feldman_cousins_errors, \
     calc_feldman_cousins_errors_binned, calc_errors_llh
 from .likelihood import StandardLLH, StepLLH
+
+
+if sys.version_info[0] > 2:
+    basestring = str
 
 
 class Solution(object):
