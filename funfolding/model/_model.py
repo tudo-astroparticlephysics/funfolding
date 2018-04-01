@@ -2,7 +2,7 @@ import warnings
 import numpy as np
 from scipy import linalg
 from scipy import stats
-
+from numpy.linalg import svd
 
 class Model(object):
     name = 'Model'
@@ -521,6 +521,8 @@ class BiasedLinearModel(LinearModel):
 
 
 class PolynominalSytematic(object):
+    n_parameters = 1
+
     def __init__(self,
                  name,
                  degree,
@@ -636,6 +638,147 @@ class PolynominalSytematic(object):
 
     def __call__(self, baseline_digitized, x):
         return self.evaluate(baseline_digitized, x)
+
+
+def plane_fit(points):
+    """
+    https://stackoverflow.com/a/18968498
+    p, n = planeFit(points)
+
+    Given an array, points, of shape (d,...)
+    representing points in d-dimensional space,
+    fit an d-dimensional plane to the points.
+    Return a point, p, on the plane (the point-cloud centroid),
+    and the normal, n.
+    """
+    points = np.reshape(points, (np.shape(points)[0], -1))
+    assert points.shape[0] <= points.shape[1], \
+        "There are only {} points in {} dimensions.".format(points.shape[1],
+                                                            points.shape[0])
+    ctr = points.mean(axis=1)
+    x = points - ctr[:,np.newaxis]
+    M = np.dot(x, x.T) # Could also use np.cov(x) here.
+    return ctr, svd(M)[0][:,-1]
+
+
+class PlaneSytematic(object):
+    n_parameters = 2
+
+    def __init__(self,
+                 name,
+                 prior=None,
+                 bounds=None):
+        self.name = name
+        if bounds is None:
+            self.bounds = lambda x: True
+        else:
+            bounds_x = bounds[0]
+            bounds_y = bounds[1]
+            uniform_prior = stats.uniform(
+                loc=(bounds_x[0], bounds_y[0]),
+                scale=(bounds_x[1] - bounds_x[0],
+                       bounds_y[1] - bounds_y[0]))
+            self.bounds = lambda x: all(uniform_prior.pdf(x) > 0)
+        self.x = None
+        self.coeffs = None
+        if prior is None:
+            prior_pdf = lambda x: 1.
+        elif hasattr(prior, 'pdf'):
+            prior_pdf = prior.pdf
+        elif callable(prior):
+            prior_pdf = prior
+        else:
+            raise TypeError('The provided prior has to be None, '
+                            'scipy.stats frozen rv or callable!')
+        self.prior = prior
+        self.prior_pdf = prior_pdf
+
+    def lnprob_prior(self, x):
+        if self.bounds(x):
+            return np.log(self.prior_pdf(x))
+        else:
+            return np.inf * -1
+
+    def sample_from_prior(self, size, sample_func_name=None):
+        if hasattr(self.prior, 'rvs'):
+            if self.bounds is None:
+                samples = self.prior.rvs(size)
+            else:
+                samples = np.zeros(size, dtype=float)
+                pointer = 0
+                while pointer < size:
+                    r = self.prior.rvs()
+                    if self.bounds(r):
+                        samples[pointer] = r
+                        pointer += 1
+        elif sample_func_name is not None:
+            f = getattr(self.prior, sample_func_name)
+            samples = f(size)
+        else:
+            raise TypeError(
+                'Provided prior has neither a function called \'rvs\' nor '
+                '\'sample_func_name\' was passed to the function!')
+        return samples
+
+    def add_data(self,
+                 xy_coords,
+                 baseline_idx,
+                 digitized_obs,
+                 sample_weights=None,
+                 minlength_vec_g=0):
+        self.baseline_idx = baseline_idx
+        if len(digitized_obs) != len(xy_coords):
+            raise ValueError('digitized_obs has invalid shape! It needs to '
+                             'be of shape (n_events, len(x))!')
+        if sample_weights is not None:
+            if len(sample_weights) != len(xy_coords):
+                raise ValueError(
+                    'digitized_obs has invalid shape! It needs to '
+                    'be of shape (n_events, len(x))!')
+        else:
+            sample_weights = [None] * len(xy_coords)
+        vectors_g = []
+        for y_i, w_i in zip(digitized_obs, sample_weights):
+            vectors_g.append(np.bincount(y_i,
+                                         weights=w_i,
+                                         minlength=minlength_vec_g))
+        n_bins = np.unique(len(g) for g in vectors_g)
+        if len(n_bins) > 1:
+            raise ValueError(
+                'digitized_obs has different number of populated bins! '
+                'Either use different/same binning for all dataset or '
+                'set minlength_vec_g')
+        else:
+            n_bins = n_bins[0]
+        vectors_g = np.atleast_2d(vectors_g).T
+        for i in range(len(xy_coords)):
+            if i == baseline_idx:
+                continue
+            else:
+                vectors_g[:, i] /= vectors_g[:, baseline_idx]
+        vectors_g[:, baseline_idx] = 1.
+        self.coeffs = np.empty((len(vectors_g), 2, 2), dtype=float)
+        points = np.zeros(xy_coords.shape[0], xy_coords.shape[1] + 1)
+        for i, y in enumerate(vectors_g):
+            vec_dir, vec_norm = plane_fit(points)
+            self.coeffs[i, 0, :] = vec_dir
+            self.coeffs[i, 1, :] = vec_norm
+
+    def evaluate(self, baseline_digitized, x):
+        factors = self.get_bin_factors(x)
+        return factors[baseline_digitized]
+
+    def get_bin_factors(self, x):
+        if not self.bounds(x):
+            return None
+        factors = np.zeros(self.coeffs.shape[0], dtype=float)
+        for i in range(self.degree + 1)[::-1]:
+            factors += x**i * self.coeffs[:, i]
+        return factors
+
+    def __call__(self, baseline_digitized, x):
+        return self.evaluate(baseline_digitized, x)
+
 
 
 class ArrayCacheTransformation(object):
