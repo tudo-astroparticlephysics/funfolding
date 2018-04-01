@@ -659,6 +659,16 @@ def plane_fit(points):
     return ctr, svd(M)[0][:,-1]
 
 
+def plane_fit_least_squares(points):
+    A = np.ones((points.shape[0], 3), dtype=float)
+    A[:, :2] = points[:, :2]
+    A = np.matrix(A)
+    b = np.matrix(points[:, 2]).T
+    fit = (A.T * A).I * A.T * b
+    errors = b - A * fit
+    return fit, errors
+
+
 class PlaneSytematic(object):
     n_parameters = 2
 
@@ -755,12 +765,16 @@ class PlaneSytematic(object):
             else:
                 vectors_g[:, i] /= vectors_g[:, baseline_idx]
         vectors_g[:, baseline_idx] = 1.
-        self.coeffs = np.empty((len(vectors_g), 2, 2), dtype=float)
-        points = np.zeros(xy_coords.shape[0], xy_coords.shape[1] + 1)
-        for i, y in enumerate(vectors_g):
-            vec_dir, vec_norm = plane_fit(points)
-            self.coeffs[i, 0, :] = vec_dir
-            self.coeffs[i, 1, :] = vec_norm
+
+        points = np.zeros(vectors_g.shape[0],
+                          xy_coords.shape[0],
+                          xy_coords.shape[1] + 1)
+        points[:, :, :2] = xy_coords
+        points[:, :, 2] = vectors_g
+        self.coeffs = np.empty((vectors_g.shape[0], xy_coords.shape[1] + 1))
+        for i in range(vectors_g.shape[0]):
+            fit_i, _ = plane_fit_least_squares(points[i, :, :])
+            self.coeffs[i, :] = fit_i
 
     def evaluate(self, baseline_digitized, x):
         factors = self.get_bin_factors(x)
@@ -769,10 +783,9 @@ class PlaneSytematic(object):
     def get_bin_factors(self, x):
         if not self.bounds(x):
             return None
-        factors = np.zeros(self.coeffs.shape[0], dtype=float)
-        for i in range(self.degree + 1)[::-1]:
-            factors += x**i * self.coeffs[:, i]
-        return factors
+        __x = np.ones(len(x) + 1, dtype=float)
+        __x[:len(x)] = x
+        return self.coeff *__x
 
     def __call__(self, baseline_digitized, x):
         return self.evaluate(baseline_digitized, x)
