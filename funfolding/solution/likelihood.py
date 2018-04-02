@@ -460,7 +460,7 @@ class SystematicLLH(StandardLLH):
             reg_part = 0
         p = poisson_part - reg_part
         fit_params_pointer = 0
-        for (_, lnprob_prior, n_parameters) in self.model.__x0_distributions:
+        for (_, lnprob_prior, n_parameters) in self.model.x0_distributions:
             if lnprob_prior is not None:
                 fit_params_slice = slice(fit_params_pointer,
                                          fit_params_pointer + n_parameters)

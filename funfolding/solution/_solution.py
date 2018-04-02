@@ -269,10 +269,7 @@ class LLHSolutionMCMC(Solution):
 
         pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
         x0_pointer = 0
-        model = self.model
-        print(type(model))
-        x0_dists = model.__x0_distributions
-        for (sample_x0, _, n_parameters) in x0_dists:
+        for (sample_x0, _, n_parameters) in self.model.x0_distributions:
             x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
             x0_i = self.x0[x0_slice]
             if sample_x0 is None:

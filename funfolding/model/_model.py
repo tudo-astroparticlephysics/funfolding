@@ -143,7 +143,7 @@ class LinearModel(Model):
         self.dim_g = None
         self.vec_b = None
         self.dim_fit_vector = None
-        self.__x0_distributions = None
+        self.x0_distributions = None
 
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
         """
@@ -162,7 +162,7 @@ class LinearModel(Model):
         M_norm = np.diag(1 / np.sum(self.A, axis=0))
         self.A = np.dot(self.A, M_norm)
         self.dim_fit_vector = self.dim_f
-        self.__x0_distributions = [('poisson', None, 1)] * self.dim_f
+        self.x0_distributions = [('poisson', None, 1)] * self.dim_f
 
     def evaluate(self, vec_fit):
         """Evaluating the model for a given vector f
@@ -861,7 +861,7 @@ class LinearModelSystematics(LinearModel):
         self.n_nuissance_parameters = sum(s.n_parameters
                                           for s in self.systematics)
         self.dim_fit_vector = None
-        self.__x0_distributions = None
+        self.x0_distributions = None
 
     def initialize(self,
                    digitized_obs,
@@ -879,8 +879,8 @@ class LinearModelSystematics(LinearModel):
         self.A = np.dot(self._A_unnormed,
                         np.diag(1 / np.sum(self._A_unnormed, axis=0)))
         self.dim_fit_vector = self.dim_f + self.n_nuissance_parameters
-        self.__x0_distributions = [('poisson', None, 1)] * self.dim_f
-        self.__x0_distributions += [(s.sample, s.lnprob_prior, 2)
+        self.x0_distributions = [('poisson', None, 1)] * self.dim_f
+        self.x0_distributions += [(s.sample, s.lnprob_prior, 2)
                                     for s in self.systematics]
 
     def __generate_matrix_A_unnormed(self, weight_factors=None):
