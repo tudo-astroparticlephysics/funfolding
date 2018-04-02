@@ -249,7 +249,8 @@ class LLHSolutionMCMC(Solution):
         self.vec_g = llh.vec_g
         self.model = model
         if hasattr(self.model, 'systematics'):
-            self.n_nuissance = len(self.model.systematics)
+            self.n_nuissance = sum(s.n_parameters
+                                   for s in self.model.systematics)
         else:
             self.n_nuissance = 0
 
@@ -268,7 +269,10 @@ class LLHSolutionMCMC(Solution):
 
         pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
         x0_pointer = 0
-        for (sample_x0, _, n_parameters) in self.model.__x0_distributions:
+        model = self.model
+        print(type(model))
+        x0_dists = model.__x0_distributions
+        for (sample_x0, _, n_parameters) in x0_dists:
             x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
             x0_i = self.x0[x0_slice]
             if sample_x0 is None:
