@@ -880,7 +880,7 @@ class LinearModelSystematics(LinearModel):
                         np.diag(1 / np.sum(self._A_unnormed, axis=0)))
         self.dim_fit_vector = self.dim_f + self.n_nuissance_parameters
         self.x0_distributions = [('poisson', None, 1)] * self.dim_f
-        self.x0_distributions += [(s.sample, s.lnprob_prior, 2)
+        self.x0_distributions += [(s.sample, s.lnprob_prior, s.n_parameters)
                                     for s in self.systematics]
 
     def __generate_matrix_A_unnormed(self, weight_factors=None):
