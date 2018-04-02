@@ -792,7 +792,7 @@ class PlaneSytematic(object):
             return None
         __x = np.ones(len(x) + 1, dtype=float)
         __x[:len(x)] = x
-        return self.coeff *__x
+        return self.coeff * __x
 
     def __call__(self, baseline_digitized, x):
         return self.evaluate(baseline_digitized, x)
@@ -881,7 +881,7 @@ class LinearModelSystematics(LinearModel):
         self.dim_fit_vector = self.dim_f + self.n_nuissance_parameters
         self.x0_distributions = [('poisson', None, 1)] * self.dim_f
         self.x0_distributions += [(s.sample, s.lnprob_prior, s.n_parameters)
-                                    for s in self.systematics]
+                                  for s in self.systematics]
 
     def __generate_matrix_A_unnormed(self, weight_factors=None):
         if self.sample_weight is None:
