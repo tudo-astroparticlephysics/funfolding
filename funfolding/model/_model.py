@@ -536,10 +536,12 @@ class PolynominalSytematic(object):
         self.degree = degree
         if bounds is None:
             self.bounds = lambda x: True
+            self._bounds = None
         elif len(bounds) == 2:
             scale = bounds[1] - bounds[0]
             uniform_prior = stats.uniform(loc=bounds[0], scale=scale)
             self.bounds = lambda x: uniform_prior.pdf(x) > 0
+            self._bounds = bounds
         else:
             raise ValueError('bounds can be None or array-type with length 2')
         self.x = None
@@ -592,7 +594,6 @@ class PolynominalSytematic(object):
                  sample_weights=None,
                  minlength_vec_g=0):
         self.baseline_idx = baseline_idx
-        self.x = x
         if len(digitized_obs) != len(x):
             raise ValueError('digitized_obs has invalid shape! It needs to '
                              'be of shape (n_events, len(x))!')
@@ -603,12 +604,12 @@ class PolynominalSytematic(object):
                     'be of shape (n_events, len(x))!')
         else:
             sample_weights = [None] * len(x)
-        vectors_g = []
+        vector_g = []
         for y_i, w_i in zip(digitized_obs, sample_weights):
-            vectors_g.append(np.bincount(y_i,
+            vector_g.append(np.bincount(y_i,
                                          weights=w_i,
                                          minlength=minlength_vec_g))
-        n_bins = np.unique(len(g) for g in vectors_g)
+        n_bins = np.unique(len(g) for g in vector_g)
         if len(n_bins) > 1:
             raise ValueError(
                 'digitized_obs has different number of populated bins! '
@@ -616,17 +617,40 @@ class PolynominalSytematic(object):
                 'set minlength_vec_g')
         else:
             n_bins = n_bins[0]
-        vectors_g = np.atleast_2d(vectors_g).T
+        vector_g = np.atleast_2d(vector_g).T
         for i in range(len(x)):
             if i == baseline_idx:
                 continue
             else:
-                vectors_g[:, i] /= vectors_g[:, baseline_idx]
-        vectors_g[:, baseline_idx] = 1.
-        self.coeffs = np.empty((len(vectors_g), self.degree + 1), dtype=float)
-        for i, y in enumerate(vectors_g):
+                vector_g[:, i] /= vector_g[:, baseline_idx]
+        vector_g[:, baseline_idx] = 1.
+        self.coeffs = np.empty((len(vector_g), self.degree + 1), dtype=float)
+        for i, y in enumerate(vector_g):
             c = np.polyfit(x, y, self.degree)
             self.coeffs[i, :] = c
+        self.vector_g = vector_g
+        self.x = x
+
+    def plot(self, bin_i):
+        from matplotlib import pyplot as plt
+        if self.coeffs is None:
+            raise RuntimeError("No data added yet. Call 'add_data' first.")
+
+        fig, ax = plt.subplots()
+        x_lim = [min(self.x), max(self.x)]
+        x_lim[0] = x_lim[0] - (x_lim[1] - x_lim[0]) * 0.1
+        x_lim[1] = x_lim[1] + (x_lim[1] - x_lim[0]) * 0.1
+        if self._bounds is not None:
+            x_lim = self._bounds
+        ax.set_xlim(x_lim)
+
+        x_points = np.linspace(x_lim[0], x_lim[1], 100)
+        y_points = np.zeros_like(x_points)
+        for i in range(self.degree + 1)[::-1]:
+            coeff_pointer = self.coeffs.shape[1] - 1 - i
+            y_points += x_points**i * self.coeffs[bin_i, coeff_pointer]
+        ax.plot(x_points, y_points, '-', color='0.5')
+        ax.plot(np.array(self.x), self.vector_g[bin_i], 'o', color='b')
 
     def evaluate(self, baseline_digitized, x):
         factors = self.get_bin_factors(x)
@@ -637,7 +661,8 @@ class PolynominalSytematic(object):
             return None
         factors = np.zeros(self.coeffs.shape[0], dtype=float)
         for i in range(self.degree + 1)[::-1]:
-            factors += x**i * self.coeffs[:, i]
+            coeff_pointer = self.coeffs.shape[1] - 1 - i
+            factors += x**i * self.coeffs[:, coeff_pointer]
         return factors
 
     def __call__(self, baseline_digitized, x):
@@ -685,15 +710,37 @@ class PlaneSytematic(object):
         self.name = name
         if bounds is None:
             self.bounds = lambda x: True
-        else:
+            self._bounds = None
+        elif len(bounds) == 2:
             bounds_x = bounds[0]
             bounds_y = bounds[1]
-            uniform_prior = stats.uniform(
-                loc=(bounds_x[0], bounds_y[0]),
-                scale=(bounds_x[1] - bounds_x[0],
-                       bounds_y[1] - bounds_y[0]))
-            self.bounds = lambda x: all(uniform_prior.pdf(x) > 0)
-        self.x = None
+            if bounds_x is None and bounds_y is not None:
+                uniform_prior = stats.uniform(
+                    loc=bounds_y[0],
+                    scale=bounds_y[1] - bounds_y[0])
+                self.bounds = lambda x: uniform_prior.pdf(x[1]) > 0
+                self._bounds = (None, bounds_y)
+            elif bounds_x is not None and bounds_y is None:
+                uniform_prior = stats.uniform(
+                    loc=bounds_x[0],
+                    scale=bounds_x[1] - bounds_x[0])
+                self.bounds = lambda x: uniform_prior.pdf(x[0]) > 0
+                self._bounds = (bounds_x, None)
+            elif bounds_x is not None and bounds_y is not None:
+                uniform_prior = stats.uniform(
+                    loc=(bounds_x[0], bounds_y[0]),
+                    scale=(bounds_x[1] - bounds_x[0],
+                           bounds_y[1] - bounds_y[0]))
+                self.bounds = lambda x: all(uniform_prior.pdf(x) > 0)
+                self._bounds = bounds
+            else:
+                self.bounds = lambda x: True
+                self._bounds = None
+        else:
+            raise ValueError(
+                "'bounds' can be either None or a tuple/list of len 2 "
+                " containing None or the acutal bounds for")
+        self.points = None
         self.coeffs = None
         if prior is None:
             def prior_pdf(x):
@@ -752,12 +799,12 @@ class PlaneSytematic(object):
                     'be of shape (n_events, len(x))!')
         else:
             sample_weights = [None] * len(xy_coords)
-        vectors_g = []
+        vector_g = []
         for y_i, w_i in zip(digitized_obs, sample_weights):
-            vectors_g.append(np.bincount(y_i,
+            vector_g.append(np.bincount(y_i,
                                          weights=w_i,
                                          minlength=minlength_vec_g))
-        n_bins = np.unique(len(g) for g in vectors_g)
+        n_bins = np.unique(len(g) for g in vector_g)
         if len(n_bins) > 1:
             raise ValueError(
                 'digitized_obs has different number of populated bins! '
@@ -765,23 +812,62 @@ class PlaneSytematic(object):
                 'set minlength_vec_g')
         else:
             n_bins = n_bins[0]
-        vectors_g = np.atleast_2d(vectors_g).T
+        vector_g = np.atleast_2d(vector_g).T
         for i in range(len(xy_coords)):
             if i == baseline_idx:
                 continue
             else:
-                vectors_g[:, i] /= vectors_g[:, baseline_idx]
-        vectors_g[:, baseline_idx] = 1.
+                vector_g[:, i] /= vector_g[:, baseline_idx]
+        vector_g[:, baseline_idx] = 1.
 
-        points = np.zeros(vectors_g.shape[0],
+        points = np.zeros(vector_g.shape[0],
                           xy_coords.shape[0],
                           xy_coords.shape[1] + 1)
         points[:, :, :2] = xy_coords
-        points[:, :, 2] = vectors_g
-        self.coeffs = np.empty((vectors_g.shape[0], xy_coords.shape[1] + 1))
-        for i in range(vectors_g.shape[0]):
+        points[:, :, 2] = vector_g
+        self.coeffs = np.empty((vector_g.shape[0], xy_coords.shape[1] + 1))
+        for i in range(vector_g.shape[0]):
             fit_i, _ = plane_fit_least_squares(points[i, :, :])
             self.coeffs[i, :] = fit_i
+        self.points = points
+
+    def plot(self, bin_i):
+        from matplotlib import pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        if self.coeffs is None:
+            raise RuntimeError("No data added yet. Call 'add_data' first.")
+        points = self.points[bin_i, :, :]
+        coeffs = self.coeff[bin_i, :]
+
+        x_lim = [np.min(points[:, 0], axis=0), np.max(points[:, 0], axis=0)]
+        y_lim = [np.min(points[:, 1], axis=0), np.max(points[:, 1], axis=0)]
+        x_lim[0] = x_lim[0] - (x_lim[1] - x_lim[0]) * 0.1
+        x_lim[1] = x_lim[1] + (x_lim[1] - x_lim[0]) * 0.1
+        y_lim[0] = y_lim[0] - (y_lim[1] - y_lim[0]) * 0.1
+        y_lim[1] = y_lim[1] + (y_lim[1] - y_lim[0]) * 0.1
+        if self._bounds is not None:
+            x_lim_bounds = self._bounds[0]
+            if x_lim_bounds is not None:
+                x_lim = x_lim_bounds
+            y_lim_bounds = self._bounds[1]
+            if y_lim_bounds is not None:
+                y_lim = y_lim_bounds
+
+        fig, ax = plt.subplots(projection='3d')
+        ax.set_xlim(x_lim[0], x_lim[1])
+        ax.set_ylim(y_lim[0], y_lim[1])
+        X, Y = np.meshgrid(np.arange(x_lim[0], x_lim[1]),
+                           np.arange(y_lim[0], y_lim[1]))
+        Z = np.zeros(X.shape)
+        for r in range(X.shape[0]):
+            for c in range(X.shape[1]):
+                Z[r,c] = coeffs[0] * X[r,c] + coeffs[1] * Y[r,c] + coeffs[2]
+        ax.plot_wireframe(X,Y,Z, color='0.5')
+        ax.scatter(points[:, 0],
+                   points[:, 1],
+                   points[:, 2],
+                   color='b')
+
 
     def evaluate(self, baseline_digitized, x):
         factors = self.get_bin_factors(x)
