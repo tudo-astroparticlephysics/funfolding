@@ -531,9 +531,11 @@ class PolynominalSytematic(object):
                  name,
                  degree,
                  prior=None,
+                 use_stat_error=True,
                  bounds=None):
         self.name = name
         self.degree = degree
+        self.use_stat_error = use_stat_error
         if bounds is None:
             self.bounds = lambda x: True
             self._bounds = None
@@ -605,10 +607,14 @@ class PolynominalSytematic(object):
         else:
             sample_weights = [None] * len(x)
         vector_g = []
+        rel_uncert = []
         for y_i, w_i in zip(digitized_obs, sample_weights):
             vector_g.append(np.bincount(y_i,
                                          weights=w_i,
                                          minlength=minlength_vec_g))
+            rel_uncert.append(np.sqrt(np.bincount(y_i,
+                                      weights=w_i**2,
+                                      minlength=minlength_vec_g)))
         n_bins = np.unique(len(g) for g in vector_g)
         if len(n_bins) > 1:
             raise ValueError(
@@ -617,7 +623,9 @@ class PolynominalSytematic(object):
                 'set minlength_vec_g')
         else:
             n_bins = n_bins[0]
-        vector_g = np.atleast_2d(vector_g).T
+        vector_g = np.atleast_2d(vector_g).T#
+        rel_uncert = np.atleast_2d(rel_uncert).T
+        rel_uncert /= vector_g
         for i in range(len(x)):
             if i == baseline_idx:
                 continue
@@ -625,10 +633,15 @@ class PolynominalSytematic(object):
                 vector_g[:, i] /= vector_g[:, baseline_idx]
         vector_g[:, baseline_idx] = 1.
         self.coeffs = np.empty((len(vector_g), self.degree + 1), dtype=float)
-        for i, y in enumerate(vector_g):
-            c = np.polyfit(x, y, self.degree)
+        for i, (y, uncert) in enumerate(zip(vector_g, rel_uncert)):
+            if self.use_stat_error:
+                c = np.polyfit(x, y, self.degree, w = 1. / (uncert * y))
+            else:
+                c = np.polyfit(x, y, self.degree)
             self.coeffs[i, :] = c
+
         self.vector_g = vector_g
+        self.rel_uncert = rel_uncert
         self.x = x
 
     def plot(self, bin_i):
@@ -650,7 +663,29 @@ class PolynominalSytematic(object):
             coeff_pointer = self.coeffs.shape[1] - 1 - i
             y_points += x_points**i * self.coeffs[bin_i, coeff_pointer]
         ax.plot(x_points, y_points, '-', color='0.5')
-        ax.plot(np.array(self.x), self.vector_g[bin_i], 'o', color='b')
+
+        yerr = self.rel_uncert[bin_i] * self.vector_g[bin_i]
+
+        y_min = np.min(self.vector_g[bin_i] - yerr)
+        y_max = np.max(self.vector_g[bin_i] + yerr)
+        offset = (y_max - y_min) * 0.05
+
+        ax.set_ylim(y_min - offset, y_max + offset)
+
+        ax.errorbar(np.array(self.x),
+                    self.vector_g[bin_i],
+                    yerr=yerr,
+                    fmt='o',
+                    color='b')
+        bbox_props = dict(fc="0.5", ec="0.5")
+        ax.annotate('Bin {:d}'.format(bin_i),
+                    xy=(0.05, 0.9),
+                    xytext=(0, 0,),
+                    bbox=bbox_props,
+                    xycoords='axes fraction',
+                    textcoords='offset points',
+                    color='w')
+        return fig, ax
 
     def evaluate(self, baseline_digitized, x):
         factors = self.get_bin_factors(x)
