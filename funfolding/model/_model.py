@@ -610,8 +610,8 @@ class PolynominalSytematic(object):
         rel_uncert = []
         for y_i, w_i in zip(digitized_obs, sample_weights):
             vector_g.append(np.bincount(y_i,
-                                         weights=w_i,
-                                         minlength=minlength_vec_g))
+                                        weights=w_i,
+                                        minlength=minlength_vec_g))
             rel_uncert.append(np.sqrt(np.bincount(y_i,
                                       weights=w_i**2,
                                       minlength=minlength_vec_g)))
@@ -623,7 +623,7 @@ class PolynominalSytematic(object):
                 'set minlength_vec_g')
         else:
             n_bins = n_bins[0]
-        vector_g = np.atleast_2d(vector_g).T#
+        vector_g = np.atleast_2d(vector_g).T
         rel_uncert = np.atleast_2d(rel_uncert).T
         rel_uncert /= vector_g
         for i in range(len(x)):
@@ -635,7 +635,7 @@ class PolynominalSytematic(object):
         self.coeffs = np.empty((len(vector_g), self.degree + 1), dtype=float)
         for i, (y, uncert) in enumerate(zip(vector_g, rel_uncert)):
             if self.use_stat_error:
-                c = np.polyfit(x, y, self.degree, w = 1. / (uncert * y))
+                c = np.polyfit(x, y, self.degree, w=1. / (uncert * y))
             else:
                 c = np.polyfit(x, y, self.degree)
             self.coeffs[i, :] = c
@@ -839,8 +839,8 @@ class PlaneSytematic(object):
         vector_g = []
         for y_i, w_i in zip(digitized_obs, sample_weights):
             vector_g.append(np.bincount(y_i,
-                                         weights=w_i,
-                                         minlength=minlength_vec_g))
+                                        weights=w_i,
+                                        minlength=minlength_vec_g))
         n_bins = np.unique(len(g) for g in vector_g)
         if len(n_bins) > 1:
             raise ValueError(
@@ -870,7 +870,7 @@ class PlaneSytematic(object):
 
     def plot(self, bin_i):
         from matplotlib import pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
         if self.coeffs is None:
             raise RuntimeError("No data added yet. Call 'add_data' first.")
         points = self.points[bin_i, :, :]
