@@ -824,6 +824,8 @@ class PlaneSytematic(object):
                  sample_weights=None,
                  minlength_vec_g=0):
         self.baseline_idx = baseline_idx
+        xy_coords = np.atleast_2d(xy_coords)
+        print(xy_coords.shape)
         if len(digitized_obs) != len(xy_coords):
             raise ValueError('digitized_obs has invalid shape! It needs to '
                              'be of shape (n_events, len(x))!')
@@ -855,15 +857,15 @@ class PlaneSytematic(object):
                 vector_g[:, i] /= vector_g[:, baseline_idx]
         vector_g[:, baseline_idx] = 1.
 
-        points = np.zeros(vector_g.shape[0],
-                          xy_coords.shape[0],
-                          xy_coords.shape[1] + 1)
+        points = np.zeros((vector_g.shape[0],
+                           xy_coords.shape[0],
+                           xy_coords.shape[1] + 1), dtype=float)
         points[:, :, :2] = xy_coords
         points[:, :, 2] = vector_g
         self.coeffs = np.empty((vector_g.shape[0], xy_coords.shape[1] + 1))
         for i in range(vector_g.shape[0]):
             fit_i, _ = plane_fit_least_squares(points[i, :, :])
-            self.coeffs[i, :] = fit_i
+            self.coeffs[i, :] = fit_i.flatten()
         self.points = points
 
     def plot(self, bin_i):
@@ -872,7 +874,7 @@ class PlaneSytematic(object):
         if self.coeffs is None:
             raise RuntimeError("No data added yet. Call 'add_data' first.")
         points = self.points[bin_i, :, :]
-        coeffs = self.coeff[bin_i, :]
+        coeffs = self.coeffs[bin_i, :]
 
         x_lim = [np.min(points[:, 0], axis=0), np.max(points[:, 0], axis=0)]
         y_lim = [np.min(points[:, 1], axis=0), np.max(points[:, 1], axis=0)]
@@ -887,22 +889,35 @@ class PlaneSytematic(object):
             y_lim_bounds = self._bounds[1]
             if y_lim_bounds is not None:
                 y_lim = y_lim_bounds
-
-        fig, ax = plt.subplots(projection='3d')
+        fig = plt.figure()
+        ax = plt.subplot(111, projection='3d')
         ax.set_xlim(x_lim[0], x_lim[1])
         ax.set_ylim(y_lim[0], y_lim[1])
-        X, Y = np.meshgrid(np.arange(x_lim[0], x_lim[1]),
-                           np.arange(y_lim[0], y_lim[1]))
+        ax.set_xticks(np.unique(points[:, 0]))
+        ax.set_yticks(np.unique(points[:, 1]))
+        X, Y = np.meshgrid(np.arange(x_lim[0], x_lim[1], 0.02),
+                           np.arange(y_lim[0], y_lim[1], 0.02))
         Z = np.zeros(X.shape)
         for r in range(X.shape[0]):
             for c in range(X.shape[1]):
-                Z[r,c] = coeffs[0] * X[r,c] + coeffs[1] * Y[r,c] + coeffs[2]
-        ax.plot_wireframe(X,Y,Z, color='0.5')
-        ax.scatter(points[:, 0],
-                   points[:, 1],
-                   points[:, 2],
-                   color='b')
-
+                Z[r, c] = coeffs[0] * X[r, c] + coeffs[1] * Y[r, c] + coeffs[2]
+        idx = np.ones(len(points), dtype=bool)
+        idx[self.baseline_idx] = False
+        z_min, z_max = np.min(Z), np.max(Z)
+        diff = z_max - z_min
+        ax.set_zlim(z_min - diff * 0.05, z_max + diff * 0.05)
+        for i, (x, y, z) in enumerate(points):
+            if i == self.baseline_idx:
+                color = 'r'
+            else:
+                color = 'k'
+            ax.plot([x, x],
+                    [y, y],
+                    [ax.get_zlim()[0], z],
+                    '-*',
+                    color=color)
+        ax.plot_wireframe(X, Y, Z, color='C0')
+        return fig, ax
 
     def evaluate(self, baseline_digitized, x):
         factors = self.get_bin_factors(x)
