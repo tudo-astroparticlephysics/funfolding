@@ -238,7 +238,7 @@ class LLHSolutionMCMC(Solution):
         if bounds is not None and bounds:
             warnings.warn("'bounds' have no effect or MCMC!")
 
-    def fit(self):
+    def fit(self, calc_autocorr_time=False):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
         pos_x0 = np.zeros((self.n_walkers, self.model.dim_f), dtype=float)
@@ -252,7 +252,17 @@ class LLHSolutionMCMC(Solution):
                                                   pos_x0,
                                                   n_steps)
         sigma_vec_f = calc_feldman_cousins_errors_binned(vec_f, samples)
-        return vec_f, sigma_vec_f, samples, probs
+
+        if calc_autocorr_time:
+            from datetime import datetime
+            start = datetime.now()
+            autocorr_time = sampler.get_autocorr_time()
+            end = datetime.now()
+            print('Autocorrelation took: {}'.format(end - start))
+            return vec_f, sigma_vec_f, samples, probs, autocorr_time
+        else:
+            return vec_f, sigma_vec_f, samples, probs
+
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,

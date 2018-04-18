@@ -1,8 +1,6 @@
 import numpy as np
-import pymc3 as pm
 
 from ..model import LinearModel, Model
-import theano
 
 
 def create_C_thikonov(n_dims, crop_beginning=False, crop_end=False):
@@ -316,6 +314,8 @@ class StandardLLH(LLH):
 
     def create_pymc_model(self, x0=None):
         super(StandardLLH, self).evaluate_llh()
+        import pymc3 as pm
+        import theano
         model = pm.Model()
 
         if x0 is None:
