@@ -1,6 +1,8 @@
 import warnings
 import numpy as np
 from scipy import linalg
+from scipy import stats
+from numpy.linalg import svd
 
 
 class Model(object):
@@ -140,6 +142,8 @@ class LinearModel(Model):
         self.dim_f = None
         self.dim_g = None
         self.vec_b = None
+        self.dim_fit_vector = None
+        self.x0_distributions = None
 
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
         """
@@ -157,6 +161,8 @@ class LinearModel(Model):
                                 weights=sample_weight)[0]
         M_norm = np.diag(1 / np.sum(self.A, axis=0))
         self.A = np.dot(self.A, M_norm)
+        self.dim_fit_vector = self.dim_f
+        self.x0_distributions = [('poisson', None, 1)] * self.dim_f
 
     def evaluate(self, vec_fit):
         """Evaluating the model for a given vector f
@@ -276,7 +282,11 @@ class LinearModel(Model):
                                     self.dim_f + 1)
         return binning_obs, binning_truth
 
-    def generate_vectors(self, digitized_obs=None, digitized_truth=None):
+    def generate_vectors(self,
+                         digitized_obs=None,
+                         digitized_truth=None,
+                         obs_weights=None,
+                         truth_weights=None):
         """Returns vec_g, vec_f for digitized values. Either f, g or both
         can be provided to the function.
 
@@ -300,11 +310,15 @@ class LinearModel(Model):
         """
         binning_obs, binning_truth = self.__generate_binning__()
         if digitized_obs is not None:
-            vec_g = np.histogram(digitized_obs, bins=binning_obs)[0]
+            vec_g = np.histogram(digitized_obs,
+                                 bins=binning_obs,
+                                 weights=obs_weights)[0]
         else:
             vec_g = None
         if digitized_truth is not None:
-            vec_f = np.histogram(digitized_truth, bins=binning_truth)[0]
+            vec_f = np.histogram(digitized_truth,
+                                 bins=binning_truth,
+                                 weights=truth_weights)[0]
         else:
             vec_f = None
         return vec_g, vec_f
@@ -383,6 +397,8 @@ class BiasedLinearModel(LinearModel):
         self.model_factor_ = 1.
         self.background_factor_ = 0.
         self.vec_b = None
+        self.n_nuissance_parameters = 0
+        self.dim_fit_vector = None
 
     def evaluate(self, vec_fit):
         """Evaluating the model for a given vector f
@@ -506,3 +522,631 @@ class BiasedLinearModel(LinearModel):
         super(LinearModel, self).add_background()
         self.vec_b = vec_b
         self.background_factor = np.sum(vec_b)
+
+
+class PolynominalSytematic(object):
+    n_parameters = 1
+
+    def __init__(self,
+                 name,
+                 degree,
+                 prior=None,
+                 use_stat_error=True,
+                 bounds=None):
+        self.name = name
+        self.degree = degree
+        self.use_stat_error = use_stat_error
+        if bounds is None:
+            self.bounds = lambda x: True
+            self._bounds = None
+        elif len(bounds) == 2:
+            scale = bounds[1] - bounds[0]
+            uniform_prior = stats.uniform(loc=bounds[0], scale=scale)
+            self.bounds = lambda x: uniform_prior.pdf(x) > 0
+            self._bounds = bounds
+        else:
+            raise ValueError('bounds can be None or array-type with length 2')
+        self.x = None
+        self.coeffs = None
+        if prior is None:
+            def prior_pdf(x):
+                return 1.
+
+        elif hasattr(prior, 'pdf'):
+            prior_pdf = prior.pdf
+        elif callable(prior):
+            prior_pdf = prior
+        else:
+            raise TypeError('The provided prior has to be None, '
+                            'scipy.stats frozen rv or callable!')
+        self.prior = prior
+        self.prior_pdf = prior_pdf
+
+    def lnprob_prior(self, x):
+        if self.bounds(x):
+            return np.log(self.prior_pdf(x))
+        else:
+            return np.inf * -1
+
+    def sample(self, size, sample_func_name=None):
+        if hasattr(self.prior, 'rvs'):
+            if self.bounds is None:
+                samples = self.prior.rvs(size)
+            else:
+                samples = np.zeros(size, dtype=float)
+                pointer = 0
+                while pointer < size:
+                    r = self.prior.rvs()
+                    if self.bounds(r):
+                        samples[pointer] = r
+                        pointer += 1
+        elif sample_func_name is not None:
+            f = getattr(self.prior, sample_func_name)
+            samples = f(size)
+        else:
+            raise TypeError(
+                'Provided prior has neither a function called \'rvs\' nor '
+                '\'sample_func_name\' was passed to the function!')
+        return samples
+
+    def add_data(self,
+                 x,
+                 baseline_idx,
+                 digitized_obs,
+                 sample_weights=None,
+                 minlength_vec_g=0):
+        self.baseline_idx = baseline_idx
+        if len(digitized_obs) != len(x):
+            raise ValueError('digitized_obs has invalid shape! It needs to '
+                             'be of shape (n_events, len(x))!')
+        if sample_weights is not None:
+            if len(sample_weights) != len(x):
+                raise ValueError(
+                    'digitized_obs has invalid shape! It needs to '
+                    'be of shape (n_events, len(x))!')
+        else:
+            sample_weights = [None] * len(x)
+        vector_g = []
+        rel_uncert = []
+        for y_i, w_i in zip(digitized_obs, sample_weights):
+            vector_g.append(np.bincount(y_i,
+                                        weights=w_i,
+                                        minlength=minlength_vec_g))
+            rel_uncert.append(np.sqrt(np.bincount(y_i,
+                                      weights=w_i**2,
+                                      minlength=minlength_vec_g)))
+        n_bins = np.unique(len(g) for g in vector_g)
+        if len(n_bins) > 1:
+            raise ValueError(
+                'digitized_obs has different number of populated bins! '
+                'Either use different/same binning for all dataset or '
+                'set minlength_vec_g')
+        else:
+            n_bins = n_bins[0]
+        vector_g = np.atleast_2d(vector_g).T
+        rel_uncert = np.atleast_2d(rel_uncert).T
+        rel_uncert /= vector_g
+        for i in range(len(x)):
+            if i == baseline_idx:
+                continue
+            else:
+                vector_g[:, i] /= vector_g[:, baseline_idx]
+        vector_g[:, baseline_idx] = 1.
+        self.coeffs = np.empty((len(vector_g), self.degree + 1), dtype=float)
+        for i, (y, uncert) in enumerate(zip(vector_g, rel_uncert)):
+            if self.use_stat_error:
+                c = np.polyfit(x, y, self.degree, w=1. / (uncert * y))
+            else:
+                c = np.polyfit(x, y, self.degree)
+            self.coeffs[i, :] = c
+
+        self.vector_g = vector_g
+        self.rel_uncert = rel_uncert
+        self.x = x
+
+    def plot(self, bin_i):
+        from matplotlib import pyplot as plt
+        if self.coeffs is None:
+            raise RuntimeError("No data added yet. Call 'add_data' first.")
+
+        fig, ax = plt.subplots()
+        x_lim = [min(self.x), max(self.x)]
+        x_lim[0] = x_lim[0] - (x_lim[1] - x_lim[0]) * 0.1
+        x_lim[1] = x_lim[1] + (x_lim[1] - x_lim[0]) * 0.1
+        if self._bounds is not None:
+            x_lim = self._bounds
+        ax.set_xlim(x_lim)
+
+        x_points = np.linspace(x_lim[0], x_lim[1], 100)
+        y_points = np.zeros_like(x_points)
+        for i in range(self.degree + 1)[::-1]:
+            coeff_pointer = self.coeffs.shape[1] - 1 - i
+            y_points += x_points**i * self.coeffs[bin_i, coeff_pointer]
+        ax.plot(x_points, y_points, '-', color='0.5')
+
+        yerr = self.rel_uncert[bin_i] * self.vector_g[bin_i]
+
+        y_min = np.min(self.vector_g[bin_i] - yerr)
+        y_max = np.max(self.vector_g[bin_i] + yerr)
+        offset = (y_max - y_min) * 0.05
+
+        ax.set_ylim(y_min - offset, y_max + offset)
+
+        ax.errorbar(np.array(self.x),
+                    self.vector_g[bin_i],
+                    yerr=yerr,
+                    fmt='o',
+                    color='b')
+        bbox_props = dict(fc="0.5", ec="0.5")
+        ax.annotate('Bin {:d}'.format(bin_i),
+                    xy=(0.05, 0.9),
+                    xytext=(0, 0,),
+                    bbox=bbox_props,
+                    xycoords='axes fraction',
+                    textcoords='offset points',
+                    color='w')
+        return fig, ax
+
+    def evaluate(self, baseline_digitized, x):
+        factors = self.get_bin_factors(x)
+        return factors[baseline_digitized]
+
+    def get_bin_factors(self, x):
+        if not self.bounds(x):
+            return None
+        factors = np.zeros(self.coeffs.shape[0], dtype=float)
+        for i in range(self.degree + 1)[::-1]:
+            coeff_pointer = self.coeffs.shape[1] - 1 - i
+            factors += x**i * self.coeffs[:, coeff_pointer]
+        return factors
+
+    def __call__(self, baseline_digitized, x):
+        return self.evaluate(baseline_digitized, x)
+
+
+def plane_fit(points):
+    """
+    https://stackoverflow.com/a/18968498
+    p, n = planeFit(points)
+
+    Given an array, points, of shape (d,...)
+    representing points in d-dimensional space,
+    fit an d-dimensional plane to the points.
+    Return a point, p, on the plane (the point-cloud centroid),
+    and the normal, n.
+    """
+    points = np.reshape(points, (np.shape(points)[0], -1))
+    assert points.shape[0] <= points.shape[1], \
+        "There are only {} points in {} dimensions.".format(points.shape[1],
+                                                            points.shape[0])
+    ctr = points.mean(axis=1)
+    x = points - ctr[:, np.newaxis]
+    M = np.dot(x, x.T)  # Could also use np.cov(x) here.
+    return ctr, svd(M)[0][:, -1]
+
+
+def plane_fit_least_squares(points):
+    A = np.ones((points.shape[0], 3), dtype=float)
+    A[:, :2] = points[:, :2]
+    A = np.matrix(A)
+    b = np.matrix(points[:, 2]).T
+    fit = (A.T * A).I * A.T * b
+    errors = b - A * fit
+    return fit, errors
+
+
+class PlaneSytematic(object):
+    n_parameters = 2
+
+    def __init__(self,
+                 name,
+                 prior=None,
+                 bounds=None):
+        self.name = name
+        if bounds is None:
+            self.bounds = lambda x: True
+            self._bounds = None
+        elif len(bounds) == 2:
+            bounds_x = bounds[0]
+            bounds_y = bounds[1]
+            if bounds_x is None and bounds_y is not None:
+                uniform_prior = stats.uniform(
+                    loc=bounds_y[0],
+                    scale=bounds_y[1] - bounds_y[0])
+                self.bounds = lambda x: uniform_prior.pdf(x[1]) > 0
+                self._bounds = (None, bounds_y)
+            elif bounds_x is not None and bounds_y is None:
+                uniform_prior = stats.uniform(
+                    loc=bounds_x[0],
+                    scale=bounds_x[1] - bounds_x[0])
+                self.bounds = lambda x: uniform_prior.pdf(x[0]) > 0
+                self._bounds = (bounds_x, None)
+            elif bounds_x is not None and bounds_y is not None:
+                uniform_prior = stats.uniform(
+                    loc=(bounds_x[0], bounds_y[0]),
+                    scale=(bounds_x[1] - bounds_x[0],
+                           bounds_y[1] - bounds_y[0]))
+                self.bounds = lambda x: all(uniform_prior.pdf(x) > 0)
+                self._bounds = bounds
+            else:
+                self.bounds = lambda x: True
+                self._bounds = None
+        else:
+            raise ValueError(
+                "'bounds' can be either None or a tuple/list of len 2 "
+                " containing None or the acutal bounds for")
+        self.points = None
+        self.coeffs = None
+        if prior is None:
+            def prior_pdf(x):
+                return 1.
+        elif hasattr(prior, 'pdf'):
+            prior_pdf = prior.pdf
+        elif callable(prior):
+            prior_pdf = prior
+        else:
+            raise TypeError('The provided prior has to be None, '
+                            'scipy.stats frozen rv or callable!')
+        self.prior = prior
+        self.prior_pdf = prior_pdf
+
+    def lnprob_prior(self, x):
+        if self.bounds(x):
+            return np.log(self.prior_pdf(x))
+        else:
+            return np.inf * -1
+
+    def sample(self, size, sample_func_name=None):
+        if hasattr(self.prior, 'rvs'):
+            if self.bounds is None:
+                samples = self.prior.rvs(size)
+            else:
+                samples = np.zeros(size, dtype=float)
+                pointer = 0
+                while pointer < size:
+                    r = self.prior.rvs()
+                    if self.bounds(r):
+                        samples[pointer] = r
+                        pointer += 1
+        elif sample_func_name is not None:
+            f = getattr(self.prior, sample_func_name)
+            samples = f(size)
+        else:
+            raise TypeError(
+                'Provided prior has neither a function called \'rvs\' nor '
+                '\'sample_func_name\' was passed to the function!')
+        return samples
+
+    def add_data(self,
+                 xy_coords,
+                 baseline_idx,
+                 digitized_obs,
+                 sample_weights=None,
+                 minlength_vec_g=0):
+        self.baseline_idx = baseline_idx
+        xy_coords = np.atleast_2d(xy_coords)
+        print(xy_coords.shape)
+        if len(digitized_obs) != len(xy_coords):
+            raise ValueError('digitized_obs has invalid shape! It needs to '
+                             'be of shape (n_events, len(x))!')
+        if sample_weights is not None:
+            if len(sample_weights) != len(xy_coords):
+                raise ValueError(
+                    'digitized_obs has invalid shape! It needs to '
+                    'be of shape (n_events, len(x))!')
+        else:
+            sample_weights = [None] * len(xy_coords)
+        vector_g = []
+        for y_i, w_i in zip(digitized_obs, sample_weights):
+            vector_g.append(np.bincount(y_i,
+                                        weights=w_i,
+                                        minlength=minlength_vec_g))
+        n_bins = np.unique(len(g) for g in vector_g)
+        if len(n_bins) > 1:
+            raise ValueError(
+                'digitized_obs has different number of populated bins! '
+                'Either use different/same binning for all dataset or '
+                'set minlength_vec_g')
+        else:
+            n_bins = n_bins[0]
+        vector_g = np.atleast_2d(vector_g).T
+        for i in range(len(xy_coords)):
+            if i == baseline_idx:
+                continue
+            else:
+                vector_g[:, i] /= vector_g[:, baseline_idx]
+        vector_g[:, baseline_idx] = 1.
+
+        points = np.zeros((vector_g.shape[0],
+                           xy_coords.shape[0],
+                           xy_coords.shape[1] + 1), dtype=float)
+        points[:, :, :2] = xy_coords
+        points[:, :, 2] = vector_g
+        self.coeffs = np.empty((vector_g.shape[0], xy_coords.shape[1] + 1))
+        for i in range(vector_g.shape[0]):
+            fit_i, _ = plane_fit_least_squares(points[i, :, :])
+            self.coeffs[i, :] = fit_i.flatten()
+        self.points = points
+
+    def plot(self, bin_i):
+        from matplotlib import pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+        if self.coeffs is None:
+            raise RuntimeError("No data added yet. Call 'add_data' first.")
+        points = self.points[bin_i, :, :]
+        coeffs = self.coeffs[bin_i, :]
+
+        x_lim = [np.min(points[:, 0], axis=0), np.max(points[:, 0], axis=0)]
+        y_lim = [np.min(points[:, 1], axis=0), np.max(points[:, 1], axis=0)]
+        x_lim[0] = x_lim[0] - (x_lim[1] - x_lim[0]) * 0.1
+        x_lim[1] = x_lim[1] + (x_lim[1] - x_lim[0]) * 0.1
+        y_lim[0] = y_lim[0] - (y_lim[1] - y_lim[0]) * 0.1
+        y_lim[1] = y_lim[1] + (y_lim[1] - y_lim[0]) * 0.1
+        if self._bounds is not None:
+            x_lim_bounds = self._bounds[0]
+            if x_lim_bounds is not None:
+                x_lim = x_lim_bounds
+            y_lim_bounds = self._bounds[1]
+            if y_lim_bounds is not None:
+                y_lim = y_lim_bounds
+        fig = plt.figure()
+        ax = plt.subplot(111, projection='3d')
+        ax.set_xlim(x_lim[0], x_lim[1])
+        ax.set_ylim(y_lim[0], y_lim[1])
+        ax.set_xticks(np.unique(points[:, 0]))
+        ax.set_yticks(np.unique(points[:, 1]))
+        X, Y = np.meshgrid(np.arange(x_lim[0], x_lim[1], 0.02),
+                           np.arange(y_lim[0], y_lim[1], 0.02))
+        Z = np.zeros(X.shape)
+        for r in range(X.shape[0]):
+            for c in range(X.shape[1]):
+                Z[r, c] = coeffs[0] * X[r, c] + coeffs[1] * Y[r, c] + coeffs[2]
+        idx = np.ones(len(points), dtype=bool)
+        idx[self.baseline_idx] = False
+        z_min, z_max = np.min(Z), np.max(Z)
+        diff = z_max - z_min
+        ax.set_zlim(z_min - diff * 0.05, z_max + diff * 0.05)
+        for i, (x, y, z) in enumerate(points):
+            if i == self.baseline_idx:
+                color = 'r'
+            else:
+                color = 'k'
+            ax.plot([x, x],
+                    [y, y],
+                    [ax.get_zlim()[0], z],
+                    '-*',
+                    color=color)
+        ax.plot_wireframe(X, Y, Z, color='C0')
+        return fig, ax
+
+    def evaluate(self, baseline_digitized, x):
+        factors = self.get_bin_factors(x)
+        return factors[baseline_digitized]
+
+    def get_bin_factors(self, x):
+        if not self.bounds(x):
+            return None
+        __x = np.ones(len(x) + 1, dtype=float)
+        __x[:len(x)] = x
+        return self.coeff * __x
+
+    def __call__(self, baseline_digitized, x):
+        return self.evaluate(baseline_digitized, x)
+
+
+class ArrayCacheTransformation(object):
+    def __init__(self, array):
+        self.array = array
+
+    def __call__(self, x):
+        return self.array[np.argmin(np.absolute(x - self.array))]
+
+
+class FloatCacheTransformation(object):
+    def __init__(self, value, offset=0.):
+        self.value = value
+        self.offset = offset
+
+    def __call__(self, x):
+        a = (x - self.offset) / self.value
+        return np.floor((a + 0.5)) * self.value + self.offset
+
+
+class LinearModelSystematics(LinearModel):
+    name = 'LinearModelSystematics'
+    status_need_for_eval = 0
+
+    def __init__(self, systematics=[], cache_precision=[]):
+        super(LinearModelSystematics, self).__init__()
+        self.range_obs = None
+        self.range_truth = None
+        self.A = None
+        self.dim_f = None
+        self.dim_g = None
+        self.vec_b = None
+        if systematics is None:
+            systematics = []
+        self.systematics = systematics
+        if isinstance(cache_precision, list) or \
+                isinstance(cache_precision, tuple):
+            if len(cache_precision) == 0:
+                cache_precision = None
+        if cache_precision is None and len(self.systematics) > 0:
+            cache_precision = [None] * len(self.systematics)
+        self.cache_precision = cache_precision
+        if cache_precision is not None:
+            self.__cache = {}
+            cache_error = ValueError('cache_precision has to be either None, '
+                                     'float, (float, float) or a np.array!')
+            for i, (s, p) in enumerate(zip(systematics, cache_precision)):
+                if p is not None:
+                    if isinstance(p, float):
+                        self.cache_precision[i] = FloatCacheTransformation(p)
+                    elif isinstance(p, list) or isinstance(p, tuple):
+                        if len(p) == 2:
+                            self.cache_precision[i] = FloatCacheTransformation(
+                                value=p[0],
+                                offset=p[1])
+                        else:
+                            raise cache_error
+                    elif isinstance(p, np.array):
+                        self.cache_precision[i] = ArrayCacheTransformation(p)
+                    else:
+                        raise cache_error
+                    self.__cache[s.name] = {}
+        self.n_nuissance_parameters = sum(s.n_parameters
+                                          for s in self.systematics)
+        self.dim_fit_vector = None
+        self.x0_distributions = None
+
+    def initialize(self,
+                   digitized_obs,
+                   digitized_truth,
+                   sample_weight=None):
+        super(LinearModel, self).initialize()
+        self.range_obs = (min(digitized_obs), max(digitized_obs))
+        self.range_truth = (min(digitized_truth), max(digitized_truth))
+        self.dim_f = self.range_truth[1] - self.range_truth[0] + 1
+        self.dim_g = self.range_obs[1] - self.range_obs[0] + 1
+        self.digitized_obs = digitized_obs
+        self.digitized_truth = digitized_truth
+        self.sample_weight = sample_weight
+        self._A_unnormed = self.__generate_matrix_A_unnormed()
+        self.A = np.dot(self._A_unnormed,
+                        np.diag(1 / np.sum(self._A_unnormed, axis=0)))
+        self.dim_fit_vector = self.dim_f + self.n_nuissance_parameters
+        self.x0_distributions = [('poisson', None, 1)] * self.dim_f
+        self.x0_distributions += [(s.sample, s.lnprob_prior, s.n_parameters)
+                                  for s in self.systematics]
+
+    def __generate_matrix_A_unnormed(self, weight_factors=None):
+        if self.sample_weight is None:
+            weights = weight_factors
+        else:
+            if weight_factors is not None:
+                weights = self.sample_weight * weight_factors
+            else:
+                weights = self.sample_weight
+        binning_g, binning_f = self.__generate_binning__()
+        A_unnormed = np.histogram2d(x=self.digitized_obs,
+                                    y=self.digitized_truth,
+                                    bins=(binning_g, binning_f),
+                                    weights=weights)[0]
+        return A_unnormed
+
+    def evaluate_old(self, vec_fit):
+        vec_f = vec_fit[:self.dim_f]
+        nuissance_parameters = vec_fit[self.dim_f:]
+        A = self._A_unnormed.copy()
+        for s, x_s, c_t in zip(self.systematics,
+                               nuissance_parameters,
+                               self.cache_precision):
+            factor_matrix = self.__get_systematic_event_factors(s, x_s, c_t)
+            if factor_matrix is None:
+                return np.array([-1.]), np.array([-1.]), np.array([-1.])
+            A *= factor_matrix
+        M_norm = np.diag(1 / np.sum(A, axis=0))
+        A = np.dot(A, M_norm)
+        vec_g = np.dot(A, vec_f)
+        if self.has_background:
+            vec_g += self.vec_b
+        return vec_g, vec_fit, vec_fit
+
+    def evaluate(self, vec_fit):
+        vec_f = vec_fit[:self.dim_f]
+        nuissance_parameters = vec_fit[self.dim_f:]
+        A = self._A_unnormed.copy()
+        for s, x_s, c_t in zip(self.systematics,
+                               nuissance_parameters,
+                               self.cache_precision):
+            factor_vector = self.__get_systematic_factors(s, x_s, c_t)
+            if factor_vector is None:
+                return np.array([-1.]), np.array([-1.]), np.array([-1.])
+            A *= factor_vector[:, np.newaxis]
+        M_norm = np.diag(1 / np.sum(A, axis=0))
+        A = np.dot(A, M_norm)
+        vec_g = np.dot(A, vec_f)
+        if self.has_background:
+            vec_g += self.vec_b
+        return vec_g, vec_fit, vec_fit
+
+    def __get_systematic_event_factors(self,
+                                       systematic,
+                                       x,
+                                       cache_transformation):
+        if cache_transformation is not None:
+            x = cache_transformation(x)
+            if x in self.__cache[systematic.name].keys():
+                return self.__cache[systematic.name][x]
+        weight_factors = systematic(baseline_digitized=self.digitized_obs,
+                                    x=x)
+        if weight_factors is None:
+            return None
+        A_syst = self.__generate_matrix_A_unnormed(
+            weight_factors=weight_factors)
+        A_syst[A_syst > 0] /= self._A_unnormed[A_syst > 0]
+        if cache_transformation is not None:
+            self.__cache[systematic.name][x] = A_syst
+        return A_syst
+
+    def __get_systematic_factors(self, systematic, x, cache_transformation):
+        if cache_transformation is not None:
+            x = cache_transformation(x)
+            if x in self.__cache[systematic.name].keys():
+                return self.__cache[systematic.name][x]
+        weight_factors = systematic.get_bin_factors(x=x)
+        if weight_factors is None:
+            return None
+        if cache_transformation is not None:
+            self.__cache[systematic.name][x] = weight_factors
+        return weight_factors
+
+    def generate_fit_x0(self, vec_g):
+        vec_f_0 = super(LinearModelSystematics, self).generate_fit_x0(vec_g)
+        vec_x_0 = np.ones(self.dim_fit_vector)
+        vec_x_0[:self.dim_f] = vec_f_0
+
+        for i, syst_i in enumerate(self.systematics):
+            vec_x_0[self.dim_f + i] = syst_i.x[syst_i.baseline_idx]
+        return vec_x_0
+
+    def generate_fit_bounds(self, vec_g):
+        bounds = super(LinearModelSystematics, self).generate_fit_bounds()
+        for i, syst_i in enumerate(self.systematics):
+            bounds.append(syst_i.bounds)
+        return bounds
+
+    def evaluate_condition(self, nuissance_parameters=None, normalize=True):
+        """Returns an ordered array of the singular values of matrix A.
+
+        Parameters
+        ----------
+        normalize : boolean (optional)
+            If True the singular values return relativ to the largest
+            value.
+
+        Returns
+        -------
+        S_values : np.array, shape=(dim_f)
+            Ordered array of the singular values.
+        """
+        if nuissance_parameters is not None:
+            A = self.self._A_unnormed.copy()
+            for s, x_s, c_t in zip(self.systematics,
+                                   nuissance_parameters,
+                                   self.cache_precision):
+                factor_matrix = self.__get_systematic_factor(s, x_s, c_t)
+                if factor_matrix is None:
+                    return -1., -1., -1.
+                A *= factor_matrix
+            M_norm = np.diag(1 / np.sum(A, axis=0))
+            A = np.dot(A, M_norm)
+        else:
+            A = self.A
+        if self.status < 0:
+            raise RuntimeError("Model has to be intilized. "
+                               "Run 'model.initialize' first!")
+        U, S_values, V = linalg.svd(A)
+        if normalize:
+            S_values = S_values / S_values[0]
+        return S_values

@@ -1,4 +1,5 @@
 import warnings
+import sys
 
 import numpy as np
 from scipy import linalg
@@ -12,8 +13,13 @@ except ImportError:
     no_pymc = True
 
 from ..model import LinearModel
-from .error_calculation import calc_feldman_cousins_errors_binned
+from .error_calculation import calc_feldman_cousins_errors, \
+    calc_feldman_cousins_errors_binned, calc_errors_llh
 from .likelihood import StandardLLH, StepLLH
+
+
+if sys.version_info[0] > 2:
+    basestring = str
 
 
 class Solution(object):
@@ -153,12 +159,15 @@ class LLHSolutionMinimizer(Solution):
                             bounds=self.bounds,
                             method='SLSQP',
                             constraints=cons,
-                            options={'maxiter': 10000})
+                            options={'maxiter': 500})
         if isinstance(self.llh, StandardLLH):
             try:
                 hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
                 V_f_est = linalg.inv(hess_matrix)
             except NotImplementedError:
+                V_f_est = None
+            except ValueError:
+                warnings.warn('Inversion of the Hessian matrix failed!')
                 V_f_est = None
             return solution, V_f_est
         elif isinstance(self.llh, StepLLH):
@@ -204,8 +213,13 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
 class LLHSolutionMCMC(Solution):
     name = 'LLHSolutionMCMC'
     status_need_for_fit = 1
+    available_errors_calcs = (
+        'feldmann_unbinned',
+        'feldmann_unbinned',
+        'llh_min_max')
 
     def __init__(self,
+                 error_calc='feldmann_unbinned',
                  n_walkers=100,
                  n_used_steps=2000,
                  n_burn_steps=1000,
@@ -216,18 +230,29 @@ class LLHSolutionMCMC(Solution):
             random_state = np.random.RandomState(random_state)
         self.random_state = random_state
 
+        if error_calc.lower() not in self.available_errors_calcs:
+            raise ValueError(
+                '{} invalid setting for error calculatioin'.format(error_calc))
+        self.error_calc = error_calc.lower()
+
         self.n_walkers = n_walkers
         self.n_used_steps = n_used_steps
         self.n_burn_steps = n_burn_steps
         self.n_threads = n_threads
 
         self.x0 = None
+        self.n_nuissance = None
 
     def initialize(self, model, llh):
         super(LLHSolutionMCMC, self).initialize()
         self.llh = llh
         self.vec_g = llh.vec_g
         self.model = model
+        if hasattr(self.model, 'systematics'):
+            self.n_nuissance = sum(s.n_parameters
+                                   for s in self.model.systematics)
+        else:
+            self.n_nuissance = 0
 
     def set_x0_and_bounds(self, x0=None, bounds=False, min_x0=0.5):
         super(LLHSolutionMCMC, self).set_x0_and_bounds()
@@ -238,20 +263,65 @@ class LLHSolutionMCMC(Solution):
         if bounds is not None and bounds:
             warnings.warn("'bounds' have no effect or MCMC!")
 
-    def fit(self, calc_autocorr_time=False):
+    def fit(self,
+            calc_autocorr_time=False,
+            error_interval_sigma=1.,
+            error_interval_sigma_limits=1.):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
-        pos_x0 = np.zeros((self.n_walkers, self.model.dim_f), dtype=float)
-        for i, x0_i in enumerate(self.x0):
-            if x0_i < 1.:
-                x0_i += self.min_x0
-            pos_x0[:, i] = self.random_state.poisson(x0_i, size=self.n_walkers)
-        pos_x0[pos_x0 == 0] = self.min_x0
+
+        pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
+        x0_pointer = 0
+        for (sample_x0, _, n_parameters) in self.model.x0_distributions:
+            if n_parameters == 1:
+                x0_slice = x0_pointer
+            else:
+                x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
+            x0_i = self.x0[x0_slice]
+            if sample_x0 is None:
+                pos_x0_i = x0_i
+            elif isinstance(sample_x0, basestring):
+                if sample_x0 == 'poisson':
+                    if x0_i < 1.:
+                        x0_i += self.min_x0
+                    pos_x0_i = self.random_state.poisson(x0_i,
+                                                         size=self.n_walkers)
+                    pos_x0_i[pos_x0_i == 0] = self.min_x0
+                else:
+                    raise ValueError(
+                        'Only "poisson" as name for x0 sample'
+                        'dist is implemented')
+            elif callable(sample_x0):
+                try:
+                    pos_x0_i = sample_x0(size=self.n_walkers)
+                except TypeError:
+                    pos_x0_i = x0_i
+            pos_x0[:, x0_slice] = pos_x0_i
+            x0_pointer += n_parameters
         sampler = self.__initiallize_mcmc__()
-        vec_f, samples, probs = self.__run_mcmc__(sampler,
-                                                  pos_x0,
-                                                  n_steps)
-        sigma_vec_f = calc_feldman_cousins_errors_binned(vec_f, samples)
+
+        vec_fit_params, samples, probs = self.__run_mcmc__(sampler,
+                                                           pos_x0,
+                                                           n_steps)
+        sigma_vec_f = None
+        if self.error_calc == 'feldmann_unbinned':
+            sigma_vec_f = calc_feldman_cousins_errors(
+                best_fit=vec_fit_params,
+                sample=samples,
+                sigma=error_interval_sigma,
+                sigma_limits=error_interval_sigma_limits)
+        if self.error_calc == 'feldmann_binned':
+            sigma_vec_f = calc_feldman_cousins_errors_binned(
+                best_fit=vec_fit_params,
+                sample=samples,
+                sigma=error_interval_sigma,
+                sigma_limits=error_interval_sigma_limits)
+        elif self.error_calc == 'llh_min_max':
+            sigma_vec_f = calc_errors_llh(
+                sample=samples,
+                probs=probs,
+                sigma=error_interval_sigma,
+                sigma_limits=error_interval_sigma_limits)
 
         if calc_autocorr_time:
             from datetime import datetime
@@ -259,14 +329,14 @@ class LLHSolutionMCMC(Solution):
             autocorr_time = sampler.get_autocorr_time()
             end = datetime.now()
             print('Autocorrelation took: {}'.format(end - start))
-            return vec_f, sigma_vec_f, samples, probs, autocorr_time
+            return vec_fit_params, sigma_vec_f, samples, probs, autocorr_time
         else:
-            return vec_f, sigma_vec_f, samples, probs
+            return vec_fit_params, sigma_vec_f, samples, probs
 
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,
-                                     dim=self.model.dim_f,
+                                     dim=self.model.dim_fit_vector,
                                      lnpostfn=self.llh,
                                      threads=self.n_threads)
 
@@ -276,7 +346,7 @@ class LLHSolutionMCMC(Solution):
                          rstate0=self.random_state.get_state())
 
         samples = sampler.chain[:, self.n_burn_steps:, :]
-        samples = samples.reshape((-1, self.model.dim_f))
+        samples = samples.reshape((-1, self.model.dim_fit_vector))
 
         probs = sampler.lnprobability[:, self.n_burn_steps:]
 
@@ -409,11 +479,6 @@ class LLHSolutionPyMC(Solution):
         llh = StandardLLH(tau=tau,
                           log_f=log_f,
                           vec_acceptance=vec_acceptance,
-
-
-
-
-
                           C=C)
         self.llh = llh
         self.vec_g = llh.vec_g

@@ -36,7 +36,7 @@ if __name__ == '__main__':
         format='%(processName)-10s %(name)s %(levelname)-8s %(message)s',
         level=logging.INFO)
 
-    random_seed = 1340
+    random_seed = 1341
     n_walkers = 100
     n_steps_used = 2000
     n_samples_test = 5000
