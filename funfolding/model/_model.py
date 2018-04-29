@@ -144,6 +144,7 @@ class LinearModel(Model):
         self.vec_b = None
         self.dim_fit_vector = None
         self.x0_distributions = None
+        self.n_nuissance_parameters = 0
 
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
         """
@@ -587,6 +588,7 @@ class PolynominalSytematic(object):
             raise TypeError(
                 'Provided prior has neither a function called \'rvs\' nor '
                 '\'sample_func_name\' was passed to the function!')
+        samples = np.ones(size, dtype=float) * self.x[self.baseline_idx]
         return samples
 
     def add_data(self,
@@ -609,12 +611,16 @@ class PolynominalSytematic(object):
         vector_g = []
         rel_uncert = []
         for y_i, w_i in zip(digitized_obs, sample_weights):
+            if w_i is not None:
+                w_i = w_i / np.mean(w_i)
             vector_g.append(np.bincount(y_i,
                                         weights=w_i,
                                         minlength=minlength_vec_g))
             rel_uncert.append(np.sqrt(np.bincount(y_i,
                                       weights=w_i**2,
                                       minlength=minlength_vec_g)))
+        del digitized_obs
+        del sample_weights
         n_bins = np.unique(len(g) for g in vector_g)
         if len(n_bins) > 1:
             raise ValueError(
@@ -825,7 +831,6 @@ class PlaneSytematic(object):
                  minlength_vec_g=0):
         self.baseline_idx = baseline_idx
         xy_coords = np.atleast_2d(xy_coords)
-        print(xy_coords.shape)
         if len(digitized_obs) != len(xy_coords):
             raise ValueError('digitized_obs has invalid shape! It needs to '
                              'be of shape (n_events, len(x))!')
@@ -966,13 +971,14 @@ class LinearModelSystematics(LinearModel):
         self.vec_b = None
         if systematics is None:
             systematics = []
+        if cache_precision is None:
+            cache_precision = []
         self.systematics = systematics
-        if isinstance(cache_precision, list) or \
-                isinstance(cache_precision, tuple):
-            if len(cache_precision) == 0:
-                cache_precision = None
-        if cache_precision is None and len(self.systematics) > 0:
-            cache_precision = [None] * len(self.systematics)
+        if len(cache_precision) < len(self.systematics):
+            for i in range(len(self.systematics) - len(cache_precision)):
+                cache_precision.append(None)
+        elif len(cache_precision) > len(self.systematics):
+            raise ValueError('len(systematics) should be len(cache_precision')
         self.cache_precision = cache_precision
         if cache_precision is not None:
             self.__cache = {}
@@ -1150,3 +1156,61 @@ class LinearModelSystematics(LinearModel):
         if normalize:
             S_values = S_values / S_values[0]
         return S_values
+
+
+class TestModelSystematics(LinearModelSystematics):
+    name = 'TestModelSystematics'
+    status_need_for_eval = 0
+
+    def __init__(self,
+                 systematics=[],
+                 cache_precision=[]):
+        super(LinearModelSystematics, self).__init__(
+            systematics=systematics,
+            cache_precision=cache_precision)
+        self.f_test = None
+
+    def initialize(self,
+                   f_test,
+                   digitized_obs,
+                   digitized_truth,
+                   sample_weight=None):
+        super(TestModelSystematics, self).initialize(
+            digitized_obs=digitized_truth,
+            digitized_truth=digitized_truth,
+            sample_weight=sample_weight)
+        if len(f_test) == self.dim_f:
+            self.f_test = f_test
+        else:
+            raise ValueError(
+                '\'f_test\' wrong length! Has {} needs {} '.format(
+                    len(f_test),
+                    self.dim_f))
+        self.dim_fit_vector = 1 + self.n_nuissance_parameters
+
+    def evaluate(self, vec_fit):
+        vec_fit_transformed = self.transform_fit_vector(vec_fit)
+        return super(TestModelSystematics, self).evaluate(
+            vec_fit=vec_fit_transformed)
+
+    def generate_fit_x0(self, vec_g):
+        factor = np.sum(vec_g) / np.sum(self.f_test)
+        vec_x_0 = np.ones(self.dim_fit_vector)
+        vec_x_0[0] = factor
+
+        for i, syst_i in enumerate(self.systematics):
+            vec_x_0[1 + i] = syst_i.x[syst_i.baseline_idx]
+        return vec_x_0
+
+    def generate_fit_bounds(self, vec_g, max_factor=10.):
+        bounds = [(0., max_factor)]
+        for i, syst_i in enumerate(self.systematics):
+            bounds.append(syst_i.bounds)
+        return bounds
+
+    def transform_fit_vector(self, vec_fit):
+        vec_f = self.f_test * vec_fit[0]
+        vec_fit_transformed = np.zeros(
+            self.self.dim_f + self.n_nuissance_parameters, dtype=float)
+        vec_fit_transformed[:self.dim_f] = vec_f
+        return vec_fit_transformed
