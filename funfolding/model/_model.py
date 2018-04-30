@@ -562,10 +562,15 @@ class PolynominalSytematic(object):
                             'scipy.stats frozen rv or callable!')
         self.prior = prior
         self.prior_pdf = prior_pdf
+        self.baseline_value = None
 
     def lnprob_prior(self, x):
         if self.bounds(x):
-            return np.log(self.prior_pdf(x))
+            pdf_val = self.prior_pdf(x)
+            if pdf_val >  0.:
+                return np.log(pdf_val)
+            else:
+                return np.inf * -1
         else:
             return np.inf * -1
 
@@ -588,7 +593,6 @@ class PolynominalSytematic(object):
             raise TypeError(
                 'Provided prior has neither a function called \'rvs\' nor '
                 '\'sample_func_name\' was passed to the function!')
-        samples = np.ones(size, dtype=float) * self.x[self.baseline_idx]
         return samples
 
     def add_data(self,
@@ -597,7 +601,9 @@ class PolynominalSytematic(object):
                  digitized_obs,
                  sample_weights=None,
                  minlength_vec_g=0):
+        x = np.atleast_1d(x)
         self.baseline_idx = baseline_idx
+        self.baseline_value = x[baseline_idx]
         if len(digitized_obs) != len(x):
             raise ValueError('digitized_obs has invalid shape! It needs to '
                              'be of shape (n_events, len(x))!')
@@ -610,9 +616,12 @@ class PolynominalSytematic(object):
             sample_weights = [None] * len(x)
         vector_g = []
         rel_uncert = []
+        mean_w = None
         for y_i, w_i in zip(digitized_obs, sample_weights):
             if w_i is not None:
-                w_i = w_i / np.mean(w_i)
+                if mean_w is None:
+                    mean_w = np.mean(sample_weights[baseline_idx])
+                w_i = w_i / mean_w
             vector_g.append(np.bincount(y_i,
                                         weights=w_i,
                                         minlength=minlength_vec_g))
@@ -683,14 +692,6 @@ class PolynominalSytematic(object):
                     yerr=yerr,
                     fmt='o',
                     color='b')
-        bbox_props = dict(fc="0.5", ec="0.5")
-        ax.annotate('Bin {:d}'.format(bin_i),
-                    xy=(0.05, 0.9),
-                    xytext=(0, 0,),
-                    bbox=bbox_props,
-                    xycoords='axes fraction',
-                    textcoords='offset points',
-                    color='w')
         return fig, ax
 
     def evaluate(self, baseline_digitized, x):
@@ -795,6 +796,7 @@ class PlaneSytematic(object):
                             'scipy.stats frozen rv or callable!')
         self.prior = prior
         self.prior_pdf = prior_pdf
+        self.baseline_value = None
 
     def lnprob_prior(self, x):
         if self.bounds(x):
@@ -807,12 +809,12 @@ class PlaneSytematic(object):
             if self.bounds is None:
                 samples = self.prior.rvs(size)
             else:
-                samples = np.zeros(size, dtype=float)
+                samples = np.zeros((size, 2), dtype=float)
                 pointer = 0
                 while pointer < size:
-                    r = self.prior.rvs()
+                    r = self.prior.rvs(size=(1, 2))
                     if self.bounds(r):
-                        samples[pointer] = r
+                        samples[pointer, :] = r
                         pointer += 1
         elif sample_func_name is not None:
             f = getattr(self.prior, sample_func_name)
@@ -831,6 +833,7 @@ class PlaneSytematic(object):
                  minlength_vec_g=0):
         self.baseline_idx = baseline_idx
         xy_coords = np.atleast_2d(xy_coords)
+        self.baseline_value = xy_coords[baseline_idx, :]
         if len(digitized_obs) != len(xy_coords):
             raise ValueError('digitized_obs has invalid shape! It needs to '
                              'be of shape (n_events, len(x))!')
@@ -842,7 +845,12 @@ class PlaneSytematic(object):
         else:
             sample_weights = [None] * len(xy_coords)
         vector_g = []
+        mean_w = None
         for y_i, w_i in zip(digitized_obs, sample_weights):
+            if w_i is not None:
+                if mean_w is None:
+                    mean_w = np.mean(sample_weights[baseline_idx])
+                w_i /= mean_w
             vector_g.append(np.bincount(y_i,
                                         weights=w_i,
                                         minlength=minlength_vec_g))
@@ -933,7 +941,7 @@ class PlaneSytematic(object):
             return None
         __x = np.ones(len(x) + 1, dtype=float)
         __x[:len(x)] = x
-        return self.coeff * __x
+        return np.sum(self.coeffs * __x, axis=1)
 
     def __call__(self, baseline_digitized, x):
         return self.evaluate(baseline_digitized, x)
@@ -1062,13 +1070,15 @@ class LinearModelSystematics(LinearModel):
         vec_f = vec_fit[:self.dim_f]
         nuissance_parameters = vec_fit[self.dim_f:]
         A = self._A_unnormed.copy()
-        for s, x_s, c_t in zip(self.systematics,
-                               nuissance_parameters,
-                               self.cache_precision):
-            factor_vector = self.__get_systematic_factors(s, x_s, c_t)
+        pointer = 0
+        for syst_i, c_t in zip(self.systematics, self.cache_precision):
+            s = slice(pointer, pointer + syst_i.n_parameters)
+            x_s = nuissance_parameters[s]
+            factor_vector = self.__get_systematic_factors(syst_i, x_s, c_t)
             if factor_vector is None:
                 return np.array([-1.]), np.array([-1.]), np.array([-1.])
             A *= factor_vector[:, np.newaxis]
+            pointer += syst_i.n_parameters
         M_norm = np.diag(1 / np.sum(A, axis=0))
         A = np.dot(A, M_norm)
         vec_g = np.dot(A, vec_f)
@@ -1107,13 +1117,17 @@ class LinearModelSystematics(LinearModel):
             self.__cache[systematic.name][x] = weight_factors
         return weight_factors
 
-    def generate_fit_x0(self, vec_g):
+    def generate_fit_x0(self, vec_g, size=None):
         vec_f_0 = super(LinearModelSystematics, self).generate_fit_x0(vec_g)
         vec_x_0 = np.ones(self.dim_fit_vector)
         vec_x_0[:self.dim_f] = vec_f_0
-
-        for i, syst_i in enumerate(self.systematics):
-            vec_x_0[self.dim_f + i] = syst_i.x[syst_i.baseline_idx]
+        syst_x0_dists = self.x0_distributions[self.dim_f:]
+        pointer = self.dim_f
+        for syst_i in self.systematics:
+            s = slice(pointer, pointer + syst_i.n_parameters)
+            vec_x_0[s] = syst_i.baseline_value
+            pointer += syst_i.n_parameters
+        print(vec_x_0)
         return vec_x_0
 
     def generate_fit_bounds(self, vec_g):

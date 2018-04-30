@@ -122,3 +122,27 @@ def calc_feldman_cousins_errors_binned(best_fit,
             sigma_vec_best[0, i] = 0.
         sigma_vec_best[1, i] = np.max(added_bins)
     return sigma_vec_best
+
+
+def bayesian_parameter_estimation(sample,
+                                  sigma=1.,
+                                  sigma_limits=None,
+                                  precision_f=0.1,
+                                  n_nuissance=0):
+    if sigma_limits is None:
+        sigma_limits = sigma
+    interval_lower = norm.cdf(-sigma) * 100.
+    interval_upper = norm.cdf(sigma) * 100.
+    upper_limit = norm.cdf(sigma_limits)
+    spectrum = np.percentile(sample,
+                             q=[interval_lower, 50.,interval_upper], axis=0)
+    calc_limit = np.zeros(spectrum.shape[1], dtype=bool)
+    calc_limit[:-n_nuissance] = spectrum[0, :-n_nuissance] < precision_f
+    spectrum[0, calc_limit] = 0.
+    spectrum[2, calc_limit] = np.percentile(sample[:, calc_limit],
+                                            q=[upper_limit], axis=0)
+    best_fit = spectrum[1, :]
+    sigma_vec_best = np.zeros((2, len(best_fit)))
+    sigma_vec_best[0, :] = spectrum[0, :]
+    sigma_vec_best[1, :] = spectrum[2, :]
+    return best_fit, sigma_vec_best

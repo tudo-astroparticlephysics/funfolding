@@ -13,8 +13,7 @@ except ImportError:
     no_pymc = True
 
 from ..model import LinearModel
-from .error_calculation import calc_feldman_cousins_errors, \
-    calc_feldman_cousins_errors_binned, calc_errors_llh
+from . import error_calculation as ec
 from .likelihood import StandardLLH, StepLLH
 
 
@@ -146,7 +145,7 @@ class LLHSolutionMinimizer(Solution):
             self.x0 = x0
             self.bounds = bounds
 
-    def fit(self, constrain_N=True):
+    def fit(self, constrain_N=True, calc_inv_hessian=True):
         super(LLHSolutionMinimizer, self).fit()
         if constrain_N:
             cons = ({
@@ -161,14 +160,16 @@ class LLHSolutionMinimizer(Solution):
                             constraints=cons,
                             options={'maxiter': 500})
         if isinstance(self.llh, StandardLLH):
-            try:
-                hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
-                V_f_est = linalg.inv(hess_matrix)
-            except NotImplementedError:
-                V_f_est = None
-            except ValueError:
-                warnings.warn('Inversion of the Hessian matrix failed!')
-                V_f_est = None
+            V_f_est = None
+            if calc_inv_hessian:
+                try:
+                    hess_matrix = self.llh.evaluate_neg_hessian(solution.x)
+                    V_f_est = linalg.inv(hess_matrix)
+                except NotImplementedError:
+                    pass
+                except ValueError:
+                    warnings.warn('Inversion of the Hessian matrix failed!')
+                    pass
             return solution, V_f_est
         elif isinstance(self.llh, StepLLH):
             vec_f_est = self.llh.generate_vec_f_est(solution.x)
@@ -214,12 +215,13 @@ class LLHSolutionMCMC(Solution):
     name = 'LLHSolutionMCMC'
     status_need_for_fit = 1
     available_errors_calcs = (
+        'bayesian',
         'feldmann_unbinned',
-        'feldmann_unbinned',
+        'feldmann_binned',
         'llh_min_max')
 
     def __init__(self,
-                 error_calc='feldmann_unbinned',
+                 error_calc='bayesian',
                  n_walkers=100,
                  n_used_steps=2000,
                  n_burn_steps=1000,
@@ -228,7 +230,6 @@ class LLHSolutionMCMC(Solution):
         if not isinstance(random_state, np.random.RandomState):
             random_state = np.random.RandomState(random_state)
         self.random_state = random_state
-
         if error_calc.lower() not in self.available_errors_calcs:
             raise ValueError(
                 '{} invalid setting for error calculatioin'.format(error_calc))
@@ -269,33 +270,40 @@ class LLHSolutionMCMC(Solution):
         n_steps = self.n_used_steps + self.n_burn_steps
 
         pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
-        x0_pointer = 0
-        for (sample_x0, _, n_parameters) in self.model.x0_distributions:
-            if n_parameters == 1:
-                x0_slice = x0_pointer
-            else:
-                x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
-            x0_i = self.x0[x0_slice]
-            if sample_x0 is None:
-                pos_x0_i = x0_i
-            elif isinstance(sample_x0, basestring):
-                if sample_x0 == 'poisson':
-                    if x0_i < 1.:
-                        x0_i += self.min_x0
-                    pos_x0_i = self.random_state.poisson(x0_i,
-                                                         size=self.n_walkers)
-                    pos_x0_i[pos_x0_i == 0] = self.min_x0
+
+        llh_pos_x0 = np.zeros(self.n_walkers, dtype=float)
+        llh_pos_x0[:] = np.inf * -1.
+        while any(np.isinf(llh_pos_x0)):
+            x0_pointer = 0
+            idx = np.isinf(llh_pos_x0)
+            n_new = np.sum(idx)
+            new_pos_x0 = np.zeros((n_new, len(self.x0)), dtype=float)
+            for (sample_x0, _, n_parameters) in self.model.x0_distributions:
+                if n_parameters == 1:
+                    x0_slice = x0_pointer
                 else:
-                    raise ValueError(
-                        'Only "poisson" as name for x0 sample'
-                        'dist is implemented')
-            elif callable(sample_x0):
-                try:
-                    pos_x0_i = sample_x0(size=self.n_walkers)
-                except TypeError:
+                    x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
+                x0_i = self.x0[x0_slice]
+                if sample_x0 is None:
                     pos_x0_i = x0_i
-            pos_x0[:, x0_slice] = pos_x0_i
-            x0_pointer += n_parameters
+                elif isinstance(sample_x0, basestring):
+                    if sample_x0 == 'poisson':
+                        if x0_i < 1.:
+                            x0_i += self.min_x0
+                        pos_x0_i = self.random_state.poisson(x0_i,
+                                                             size=n_new)
+                        pos_x0_i[pos_x0_i == 0] = self.min_x0
+                    else:
+                        raise ValueError(
+                            'Only "poisson" as name for x0 sample'
+                            'dist is implemented')
+                elif callable(sample_x0):
+                    pos_x0_i = sample_x0(size=n_new)
+                new_pos_x0[:, x0_slice] = pos_x0_i
+                x0_pointer += n_parameters
+            pos_x0[idx, :] = new_pos_x0
+            llh_pos_x0[idx] = np.array([self.llh(new_pos_x0[i, :])
+                                        for i in range(n_new)])
         sampler = self.__initiallize_mcmc__()
         sampler.run_mcmc(pos0=pos_x0,
                          nsteps=n_steps,
@@ -311,32 +319,40 @@ class LLHSolutionMCMC(Solution):
                                         discard=self.n_burn_steps)
         probs_flat = sampler.get_log_prob(flat=True,
                                           discard=self.n_burn_steps)
-        idx_max = np.argmax(probs_flat)
-        vec_fit_params = sample_flat[idx_max, :]
-        if self.error_calc == 'feldmann_unbinned':
-            sigma_vec_f = calc_feldman_cousins_errors(
-                best_fit=vec_fit_params,
+        if self.error_calc == 'bayesian':
+            vec_fit_params, sigma_vec_f = ec.bayesian_parameter_estimation(
                 sample=sample_flat,
                 sigma=error_interval_sigma,
                 sigma_limits=error_interval_sigma_limits,
                 n_nuissance=self.model.n_nuissance_parameters)
-        if self.error_calc == 'feldmann_binned':
-            sigma_vec_f = calc_feldman_cousins_errors_binned(
-                best_fit=vec_fit_params,
-                sample=sample_flat,
-                sigma=error_interval_sigma,
-                sigma_limits=error_interval_sigma_limits,
-                n_nuissance=self.model.n_nuissance_parameters)
-        elif self.error_calc == 'llh_min_max':
-            sigma_vec_f = calc_errors_llh(
-                sample=sample_flat,
-                probs=probs_flat,
-                sigma=error_interval_sigma,
-                sigma_limits=error_interval_sigma_limits,
-                n_nuissance=self.model.n_nuissance_parameters)
+        else:
+            idx_max = np.argmax(probs_flat)
+            vec_fit_params = sample_flat[idx_max, :]
+            if self.error_calc == 'feldmann_unbinned':
+                sigma_vec_f = ec.calc_feldman_cousins_errors(
+                    best_fit=vec_fit_params,
+                    sample=sample_flat,
+                    sigma=error_interval_sigma,
+                    sigma_limits=error_interval_sigma_limits,
+                    n_nuissance=self.model.n_nuissance_parameters)
+            if self.error_calc == 'feldmann_binned':
+                sigma_vec_f = ec.calc_feldman_cousins_errors_binned(
+                    best_fit=vec_fit_params,
+                    sample=sample_flat,
+                    sigma=error_interval_sigma,
+                    sigma_limits=error_interval_sigma_limits,
+                    n_nuissance=self.model.n_nuissance_parameters)
+            elif self.error_calc == 'llh_min_max':
+                sigma_vec_f = ec.calc_errors_llh(
+                    sample=sample_flat,
+                    probs=probs_flat,
+                    sigma=error_interval_sigma,
+                    sigma_limits=error_interval_sigma_limits,
+                    n_nuissance=self.model.n_nuissance_parameters)
         if thin is not None:
-            if thin.lower() == 'autocorr':
-                thin = int(np.max(autocorr_time[0]) + 0.5)
+            if isinstance(thin, basestring):
+                if thin.lower() == 'autocorr':
+                    thin = int(np.max(autocorr_time[0]) + 0.5)
             if isinstance(thin, int):
                 sample = sampler.get_chain(thin=thin,
                                            flat=True,
