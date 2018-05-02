@@ -656,6 +656,7 @@ class PolynominalSytematic(object):
             self.coeffs[i, :] = c
 
         self.vector_g = vector_g
+        print(vector_g)
         self.rel_uncert = rel_uncert
         self.x = x
 
@@ -740,6 +741,159 @@ def plane_fit_least_squares(points):
     fit = (A.T * A).I * A.T * b
     errors = b - A * fit
     return fit, errors
+
+
+class CircularSystematic(object):
+    n_parameters = 1
+
+    def __init__(self,
+                 name,
+                 prior=None,
+                 bounds=None):
+        self.name = name
+        if bounds is None:
+            self.bounds = lambda x: True
+            self._bounds = None
+        elif len(bounds) == 2:
+            scale = bounds[1] - bounds[0]
+            uniform_prior = stats.uniform(loc=bounds[0], scale=scale)
+            self.bounds = lambda x: uniform_prior.pdf(x) > 0
+            self._bounds = bounds
+        else:
+            raise ValueError('bounds can be None or array-type with length 2')
+        self.x = None
+        self.coeffs = None
+        if prior is None:
+            def prior_pdf(x):
+                return 1.
+
+        elif hasattr(prior, 'pdf'):
+            prior_pdf = prior.pdf
+        elif callable(prior):
+            prior_pdf = prior
+        else:
+            raise TypeError('The provided prior has to be None, '
+                            'scipy.stats frozen rv or callable!')
+        self.prior = prior
+        self.prior_pdf = prior_pdf
+        self.baseline_value = None
+
+    def lnprob_prior(self, x):
+        if self.bounds(x):
+            pdf_val = self.prior_pdf(x)
+            if pdf_val >  0.:
+                return np.log(pdf_val)
+            else:
+                return np.inf * -1
+        else:
+            return np.inf * -1
+
+    def sample(self, size, sample_func_name=None):
+        if hasattr(self.prior, 'rvs'):
+            if self.bounds is None:
+                samples = self.prior.rvs(size)
+            else:
+                samples = np.zeros(size, dtype=float)
+                pointer = 0
+                while pointer < size:
+                    r = self.prior.rvs()
+                    if self.bounds(r):
+                        samples[pointer] = r
+                        pointer += 1
+        elif sample_func_name is not None:
+            f = getattr(self.prior, sample_func_name)
+            samples = f(size)
+        else:
+            raise TypeError(
+                'Provided prior has neither a function called \'rvs\' nor '
+                '\'sample_func_name\' was passed to the function!')
+        return samples
+
+    def add_data(self,
+                 baseline_idx,
+                 digitized_obs,
+                 sample_weights=None,
+                 minlength_vec_g=0):
+        n_points = len(digitized_obs)
+        x = np.linspace(0., 360., n_points, endpoint=True)
+
+        self.baseline_idx = baseline_idx
+        self.baseline_value = x[baseline_idx]
+        if len(digitized_obs) != len(x):
+            raise ValueError('digitized_obs has invalid shape! It needs to '
+                             'be of shape (n_events, len(x))!')
+        if sample_weights is not None:
+            if len(sample_weights) != len(x):
+                raise ValueError(
+                    'digitized_obs has invalid shape! It needs to '
+                    'be of shape (n_events, len(x))!')
+        else:
+            sample_weights = [None] * len(x)
+        vector_g = []
+        rel_uncert = []
+        mean_w = None
+        for y_i, w_i in zip(digitized_obs, sample_weights):
+            if w_i is not None:
+                if mean_w is None:
+                    mean_w = np.mean(sample_weights[baseline_idx])
+                w_i = w_i / mean_w
+            vector_g.append(np.bincount(y_i,
+                                        weights=w_i,
+                                        minlength=minlength_vec_g))
+            rel_uncert.append(np.sqrt(np.bincount(y_i,
+                                      weights=w_i**2,
+                                      minlength=minlength_vec_g)))
+        del digitized_obs
+        del sample_weights
+        n_bins = np.unique(len(g) for g in vector_g)
+        if len(n_bins) > 1:
+            raise ValueError(
+                'digitized_obs has different number of populated bins! '
+                'Either use different/same binning for all dataset or '
+                'set minlength_vec_g')
+        else:
+            n_bins = n_bins[0]
+        vector_g = np.atleast_2d(vector_g).T
+        rel_uncert = np.atleast_2d(rel_uncert).T
+        rel_uncert /= vector_g
+        for i in range(len(x)):
+            if i == baseline_idx:
+                continue
+            else:
+                vector_g[:, i] /= vector_g[:, baseline_idx]
+        vector_g[:, baseline_idx] = 1.
+        self.vector_g = vector_g
+        self.rel_uncert = rel_uncert
+        self.x = x
+        __x = np.zeros(len(x) + 1, dtype=float)
+        __x[:-1] = x
+        __x[-1] = __x[-2] + np.spacing(__x[-2])
+        self.__x = __x
+        self.distance = self.x[1] - self.x[0]
+
+    def plot(self, bin_i):
+        raise NotImplementedError
+
+    def evaluate(self, baseline_digitized, x):
+        factors = self.get_bin_factors(x)
+        return factors[baseline_digitized]
+
+    def get_bin_factors(self, x):
+        if not self.bounds(x):
+            return None
+        x = x % 360.
+        distance = np.sort(np.argmin(np.absolute(self.__x - x))[:2])
+        idx_front = distance[1]
+        idx_back = distance[0]
+        if idx_front == len(x) - 1:
+            idx_front = 0
+        factor = self.x[idx_back] / self.distance
+        contribution_back = factor * self.vector_g[idx_back]
+        contribution_front = (1. - factor) * self.vector_g[idx_front]
+        return contribution_back + contribution_front
+
+    def __call__(self, baseline_digitized, x):
+        return self.evaluate(baseline_digitized, x)
 
 
 class PlaneSytematic(object):
@@ -1121,13 +1275,11 @@ class LinearModelSystematics(LinearModel):
         vec_f_0 = super(LinearModelSystematics, self).generate_fit_x0(vec_g)
         vec_x_0 = np.ones(self.dim_fit_vector)
         vec_x_0[:self.dim_f] = vec_f_0
-        syst_x0_dists = self.x0_distributions[self.dim_f:]
         pointer = self.dim_f
         for syst_i in self.systematics:
             s = slice(pointer, pointer + syst_i.n_parameters)
             vec_x_0[s] = syst_i.baseline_value
             pointer += syst_i.n_parameters
-        print(vec_x_0)
         return vec_x_0
 
     def generate_fit_bounds(self, vec_g):
