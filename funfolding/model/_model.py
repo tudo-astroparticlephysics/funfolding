@@ -1346,7 +1346,7 @@ class TestModelSystematics(LinearModelSystematics):
             digitized_truth=digitized_truth,
             sample_weight=sample_weight)
         if len(f_test) == self.dim_f:
-            self.f_test = f_test
+            self.f_test = f_test / np.sum(f_test)
         else:
             raise ValueError(
                 '\'f_test\' wrong length! Has {} needs {} '.format(
@@ -1368,8 +1368,9 @@ class TestModelSystematics(LinearModelSystematics):
             vec_x_0[1 + i] = syst_i.x[syst_i.baseline_idx]
         return vec_x_0
 
-    def generate_fit_bounds(self, vec_g, max_factor=10.):
-        bounds = [(0., max_factor)]
+    def generate_fit_bounds(self, vec_g, max_factor=3.):
+        n_events = np.sum(vec_g)
+        bounds = [(0., n_events  * max_factor)]
         for i, syst_i in enumerate(self.systematics):
             bounds.append(syst_i.bounds)
         return bounds
