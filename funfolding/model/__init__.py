@@ -1,9 +1,8 @@
-from ._model import LinearModel, BiasedLinearModel, Model
+from ._model import LinearModel, Model
 from ._model import LinearModelSystematics, PolynominalSytematic
-from ._model import LinearModelSystematics, PlaneSytematic
+from ._model import PlaneSytematic
 
 __all__ = ('LinearModel',
-           'BiasedLinearModel',
            'Model',
            'LinearModelSystematics',
            'PolynominalSytematic',

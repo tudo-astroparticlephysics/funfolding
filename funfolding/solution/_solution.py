@@ -240,23 +240,17 @@ class LLHSolutionMCMC(Solution):
         self.n_burn_steps = n_burn_steps
 
         self.x0 = None
-        self.n_nuissance = None
 
     def initialize(self, model, llh):
         super(LLHSolutionMCMC, self).initialize()
         self.llh = llh
         self.vec_g = llh.vec_g
         self.model = model
-        if hasattr(self.model, 'systematics'):
-            self.n_nuissance = sum(s.n_parameters
-                                   for s in self.model.systematics)
-        else:
-            self.n_nuissance = 0
 
     def set_x0_and_bounds(self, x0=None, bounds=False, min_x0=0.5):
         super(LLHSolutionMCMC, self).set_x0_and_bounds()
         if x0 is None:
-            x0 = self.model.generate_fit_x0(self.vec_g)
+            x0 = self.model.generate_fit_x0(self.vec_g, size=None)
         self.x0 = x0
         self.min_x0 = min_x0
         if bounds is not None and bounds:
@@ -269,41 +263,27 @@ class LLHSolutionMCMC(Solution):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
 
-        pos_x0 = np.zeros((self.n_walkers, len(self.x0)), dtype=float)
+        pos_x0 = np.zeros((self.n_walkers, self.model.dim_fit_vector),              dtype=float)
 
         llh_pos_x0 = np.zeros(self.n_walkers, dtype=float)
         llh_pos_x0[:] = np.inf * -1.
         while any(np.isinf(llh_pos_x0)):
-            x0_pointer = 0
             idx = np.isinf(llh_pos_x0)
             n_new = np.sum(idx)
-            new_pos_x0 = np.zeros((n_new, len(self.x0)), dtype=float)
-            for (sample_x0, _, n_parameters) in self.model.x0_distributions:
-                if n_parameters == 1:
-                    x0_slice = x0_pointer
-                else:
-                    x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
-                x0_i = self.x0[x0_slice]
-                if sample_x0 is None:
-                    pos_x0_i = x0_i
-                elif isinstance(sample_x0, basestring):
-                    if sample_x0 == 'poisson':
-                        if x0_i < 1.:
-                            x0_i += self.min_x0
-                        pos_x0_i = self.random_state.poisson(x0_i,
-                                                             size=n_new)
-                        pos_x0_i[pos_x0_i == 0] = self.min_x0
-                    else:
-                        raise ValueError(
-                            'Only "poisson" as name for x0 sample'
-                            'dist is implemented')
-                elif callable(sample_x0):
-                    pos_x0_i = sample_x0(size=n_new)
-                new_pos_x0[:, x0_slice] = pos_x0_i
-                x0_pointer += n_parameters
+            new_pos_x0 = self.model.generate_fit_x0(
+                vec_g=self.llh.vec_g,
+                vec_f_0=self.x0,
+                size=n_new)
             pos_x0[idx, :] = new_pos_x0
             llh_pos_x0[idx] = np.array([self.llh(new_pos_x0[i, :])
                                         for i in range(n_new)])
+
+        for i in range(self.n_walkers):
+            s = ''
+            pos_x0_i = pos_x0[i, :]
+            for x_i in pos_x0_i:
+                s += '\t{:.2f}'.format(x_i)
+            print(s)
         sampler = self.__initiallize_mcmc__()
         sampler.run_mcmc(pos0=pos_x0,
                          nsteps=n_steps,

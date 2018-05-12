@@ -134,7 +134,7 @@ class LinearModel(Model):
     has_background : boolean
         Indicator if self.vec_b should be added to the model evaluationg
     """
-    def __init__(self):
+    def __init__(self, random_state=None):
         super(LinearModel, self).__init__()
         self.range_obs = None
         self.range_truth = None
@@ -145,6 +145,10 @@ class LinearModel(Model):
         self.dim_fit_vector = None
         self.x0_distributions = None
         self.n_nuissance_parameters = 0
+        if not isinstance(random_state, np.random.RandomState):
+            random_state = np.random.RandomState(random_state)
+        self.random_state = random_state
+
 
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
         """
@@ -192,7 +196,7 @@ class LinearModel(Model):
             vec_g += self.vec_b
         return vec_g, vec_fit, vec_fit
 
-    def generate_fit_x0(self, vec_g):
+    def generate_fit_x0(self, vec_g, vec_f_0, size=None):
         """Generates a default seed for the minimization.
         The default seed vec_f_0 is a uniform distribution with
         sum(vec_f_0) = sum(vec_g). If background is present the default seed
@@ -210,12 +214,37 @@ class LinearModel(Model):
             Seed vector of a minimization.
         """
         super(LinearModel, self).generate_fit_x0()
-        n = self.A.shape[1]
-        if self.has_background:
-            vec_f_0 = np.ones(n) * (np.sum(vec_g) - np.sum(self.vec_b)) / n
-        else:
-            vec_f_0 = np.ones(n) * np.sum(vec_g) / n
-        return vec_f_0
+        n = self.dim_f
+        if vec_f_0 is None:
+
+            if self.has_background:
+                vec_f_0 = np.ones(n) * (np.sum(vec_g) - np.sum(self.vec_b)) / n
+            else:
+                vec_f_0 = np.ones(n) * np.sum(vec_g) / n
+        if size is None:
+            return vec_f_0
+        pos_x0 = np.ones((size, n), dtype=float)
+        x0_pointer = 0
+        for (sample_x0, _, n_parameters) in self.x0_distributions[:self.dim_f]:
+            if n_parameters == 1:
+                x0_slice = x0_pointer
+            else:
+                x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
+            x0_i = vec_f_0[x0_slice]
+            if sample_x0 == 'poisson':
+                pos_x0_i = self.random_state.poisson(x0_i,
+                                                     size=size)
+            else:
+                raise ValueError(
+                    'Only "poisson" as name for x0 sample'
+                    'dist is implemented')
+            pos_x0[:, x0_slice] = pos_x0_i
+            x0_pointer += 1
+        #  wiggle on each point
+        wiggle = np.absolute(self.random_state.normal(size=pos_x0.shape))
+        pos_x0 += wiggle
+        return pos_x0
+
 
     def generate_fit_bounds(self, vec_g):
         """Generates a bounds for a minimization.
@@ -336,195 +365,6 @@ class LinearModel(Model):
         self.vec_b = vec_b
 
 
-class BiasedLinearModel(LinearModel):
-    name = 'BiasedLinearModel'
-    status_need_for_eval = 1
-    """Extense the LinearModel with an bias distribtuion model_x0.
-    the vec_f is interpreted as element-wise multiple of the model_x0.
-
-    g = A * (model_x0 * vec_fit)
-
-    Internally the model_x0 is normalize in a way that
-    vec_fit = [1.] * dim_f
-    is transformed to
-     vec_f = model_x0 / sum(model_x0) * sum(vec_g).
-
-    Attributes
-    ----------
-    name : str
-        Name of the model.
-
-    model_x0 : np.array, shape=(vec_f)
-        Distribtuion which is element-wise multiplied with the vec_fit.
-
-    status : int
-        Indicates the status of the model:
-            -1 : Instance created. Not filled with values yet.
-             0 : Filled with values
-
-    dim_g :
-        Dimension of the histogrammed observable vector.
-
-    dim_f :
-        Dimension of the histogrammed truth vector.
-
-    range_obs : tuple (int, int)
-        Tuple containing the lowest and highest bin number used in
-        the digitized observable vector. For performance reasons it is
-        assumed that all numbers between min and max are used.
-
-    range_truth : tuple (int, int)
-        Tuple containing the lowest and highest bin number used in
-        the digitized truth vector. For performance reasons it is
-        assumed that all numbers between min and max are used.
-
-    A : numpy.array shape=(dim_g, dim_f)
-        Response matrix.
-
-    vec_b : numpy.array, shape=(dim_f)
-        Observable vector for the background.
-
-    has_background : boolean
-        Indicator if self.vec_b should be added to the model evaluationg
-    """
-    def __init__(self):
-        super(LinearModel, self).__init__()
-        self.range_obs = None
-        self.range_truth = None
-        self.A = None
-        self.dim_f = None
-        self.dim_g = None
-        self.model_x0 = None
-        self.model_factor_ = 1.
-        self.background_factor_ = 0.
-        self.vec_b = None
-        self.n_nuissance_parameters = 0
-        self.dim_fit_vector = None
-
-    def evaluate(self, vec_fit):
-        """Evaluating the model for a given vector f
-
-        Parameters
-        ----------
-        vec_fit : numpy.array, shape=(dim_f,)
-            Vector f for which the model should be evaluated.
-
-        Returns
-        -------
-        vec_g : nump.array, shape=(dim_g,)
-            Vector containing the number of events in observable space.
-            If background was added the returned vector is A * vec_f + vec_b.
-
-        vec_f : nump.array, shape=(dim_f,)
-            Vector used to evaluate A * vec_f
-
-        vec_f_reg : nump.array, shape=(dim_f,)
-            Vector that should be passed to the regularization. For the
-            BasisLinearModel it is identical to f.
-        """
-        vec_f = self.transform_vec_fit(vec_fit)
-        vec_g, _, _ = super(BiasedLinearModel, self).evaluate(vec_f)
-        return vec_g, vec_f, vec_fit
-
-    def transform_vec_fit(self, vec_fit):
-        """Transforms the fit vector to the actual vec_f which is e.g.
-        used to evaluate the model.
-
-        Parameters
-        ----------
-        vec_fit : np.array, shape=(dim_f)
-            Vector which should be transformed into an acutal vec_f.
-
-
-        Returns
-        -------
-        vec_f : np.array, shape=(dim_f)
-            Vector in the space of the sought-after quantity.
-        """
-        eff_factor = self.model_factor_ - self.background_factor_
-        vec_f = self.model_x0 * vec_fit * eff_factor
-        return vec_f
-
-    def generate_fit_x0(self, vec_g):
-        """Generates a default seed for the minimization.
-        The default seed vec_f_0 is a uniform distribution with
-        sum(vec_f_0) = sum(vec_g). If background is present the default seed
-        is: sum(vec_f_0) = sum(vec_g) - sum(self.vec_b).
-
-        Parameters
-        ----------
-        vec_g : np.array, shape=(dim_g)
-            Observable vector which should be used to get the correct
-            normalization for vec_f_0.
-
-        Returns
-        -------
-        vec_f_0 : np.array, shape=(dim_f)
-            Seed vector of a minimization.
-        """
-        super(LinearModel, self).generate_fit_x0()
-        return np.ones(self.dim_f)
-
-    def generate_fit_bounds(self, vec_g):
-        """Generates a bounds for a minimization.
-        The bounds are (0, sum(vec_g)) without background and
-        (0, sum(vec_g - self.vec_b)) with background. The bounds are for
-        each fit parameter/entry in f.
-
-        Parameters
-        ----------
-        vec_g : np.array, shape=(dim_g)
-            Observable vector which should be used to get the correct
-            upper bound
-
-        Returns
-        -------
-        bounds : list, shape=(dim_f)
-            List of tuples with the bounds.
-        """
-        super(LinearModel, self).generate_fit_bounds()
-        n = self.A.shape[1]
-        if self.has_background:
-            n_events = np.sum(vec_g) - np.sum(self.vec_b)
-        else:
-            n_events = np.sum(vec_g)
-        bounds = [(0, n_events)] * n
-        return bounds
-
-    def set_model_x0(self, model_x0, vec_g):
-        """Sets the model_x0. Also the vec_g for the unfolding is need,
-        to get centralize the fit around 1.
-
-        Parameters
-        ----------
-        model_x0 : np.array, shape=(dim_f)
-            Distribtuion used as a bias. Internally it is nomalized to
-            sum(model_x0) = 1.
-
-        vec_g : np.array, shape=(dim_g)
-            Observable vector which is used to get the fit centered around
-            1.
-        """
-        super(LinearModel, self).set_model_x0()
-        if len(model_x0) != self.dim_f:
-            raise ValueError("'model_x0' has to be of the length as "
-                             "vec_f!")
-        self.model_factor = sum(vec_g)
-        self.model_x0 = model_x0 / self.model_factor
-
-    def add_background(self, vec_b):
-        """Adds a background vector to the model.
-
-        Parameters
-        ----------
-        vec_b : numpy.array, shape=(dim_g)
-            Vector g which is added to the model evaluation.
-        """
-        super(LinearModel, self).add_background()
-        self.vec_b = vec_b
-        self.background_factor = np.sum(vec_b)
-
-
 class PolynominalSytematic(object):
     n_parameters = 1
 
@@ -554,9 +394,9 @@ class PolynominalSytematic(object):
                 return 1.
 
         elif hasattr(prior, 'pdf'):
-            prior_pdf = prior.pdf
+            prior_pdf = lambda x: sum(prior.pdf(x))
         elif callable(prior):
-            prior_pdf = prior
+            prior_pdf = lambda x: sum(prior(x))
         else:
             raise TypeError('The provided prior has to be None, '
                             'scipy.stats frozen rv or callable!')
@@ -656,7 +496,6 @@ class PolynominalSytematic(object):
             self.coeffs[i, :] = c
 
         self.vector_g = vector_g
-        print(vector_g)
         self.rel_uncert = rel_uncert
         self.x = x
 
@@ -942,9 +781,9 @@ class PlaneSytematic(object):
             def prior_pdf(x):
                 return 1.
         elif hasattr(prior, 'pdf'):
-            prior_pdf = prior.pdf
+            prior_pdf = lambda x: sum(prior.pdf(x))
         elif callable(prior):
-            prior_pdf = prior
+            prior_pdf = lambda x: sum(prior(x))
         else:
             raise TypeError('The provided prior has to be None, '
                             'scipy.stats frozen rv or callable!')
@@ -954,7 +793,11 @@ class PlaneSytematic(object):
 
     def lnprob_prior(self, x):
         if self.bounds(x):
-            return np.log(self.prior_pdf(x))
+            p_val = self.prior_pdf(x)
+            if p_val > 0.:
+                return np.inf * -1
+            else:
+                return np.log(p_val)
         else:
             return np.inf * -1
 
@@ -1123,8 +966,12 @@ class LinearModelSystematics(LinearModel):
     name = 'LinearModelSystematics'
     status_need_for_eval = 0
 
-    def __init__(self, systematics=[], cache_precision=[]):
-        super(LinearModelSystematics, self).__init__()
+    def __init__(self,
+                 generic_epsilon=None,
+                 systematics=[],
+                 cache_precision=[],
+                 random_state=None):
+        super(LinearModelSystematics, self).__init__(random_state=random_state)
         self.range_obs = None
         self.range_truth = None
         self.A = None
@@ -1166,6 +1013,15 @@ class LinearModelSystematics(LinearModel):
                                           for s in self.systematics)
         self.dim_fit_vector = None
         self.x0_distributions = None
+        if generic_epsilon is not None:
+            if isinstance(generic_epsilon, float):
+                if generic_epsilon <= 0.:
+                    raise ValueError('generic_epsilon has to be > 0.')
+                else:
+                    self.n_nuissance_parameters += 1
+            else:
+                raise ValueError('generic_epsilon has to be None or float > 0')
+        self.generic_epsilon = generic_epsilon
 
     def initialize(self,
                    digitized_obs,
@@ -1186,6 +1042,18 @@ class LinearModelSystematics(LinearModel):
         self.x0_distributions = [('poisson', None, 1)] * self.dim_f
         self.x0_distributions += [(s.sample, s.lnprob_prior, s.n_parameters)
                                   for s in self.systematics]
+        if self.generic_epsilon is not None:
+            s = stats.norm(loc=1., scale=self.generic_epsilon)
+            s.random_state = self.random_state
+
+            def lnprop_prior_generic_epsilon(x):
+                val = s.pdf(x)[0]
+                if val == 0.:
+                    return -np.inf
+                else:
+                    return np.log(val)
+
+            self.x0_distributions += [(s.rvs, lnprop_prior_generic_epsilon, 1)]
 
     def __generate_matrix_A_unnormed(self, weight_factors=None):
         if self.sample_weight is None:
@@ -1235,6 +1103,8 @@ class LinearModelSystematics(LinearModel):
             pointer += syst_i.n_parameters
         M_norm = np.diag(1 / np.sum(A, axis=0))
         A = np.dot(A, M_norm)
+        if self.generic_epsilon is not None:
+            vec_f *= vec_fit[-1]
         vec_g = np.dot(A, vec_f)
         if self.has_background:
             vec_g += self.vec_b
@@ -1271,16 +1141,52 @@ class LinearModelSystematics(LinearModel):
             self.__cache[systematic.name][x] = weight_factors
         return weight_factors
 
-    def generate_fit_x0(self, vec_g, size=None):
-        vec_f_0 = super(LinearModelSystematics, self).generate_fit_x0(vec_g)
-        vec_x_0 = np.ones(self.dim_fit_vector)
-        vec_x_0[:self.dim_f] = vec_f_0
-        pointer = self.dim_f
+    def generate_fit_x0(self, vec_g, vec_f_0=None, size=None):
+        vec_f_0_def_f = super(LinearModelSystematics, self).generate_fit_x0(
+                vec_g=vec_g,
+                vec_f_0=vec_f_0,
+                size=None)
+        vec_x_0_def = np.ones(self.dim_fit_vector, dtype=float)
+        vec_x_0_def[:self.dim_f] = vec_f_0_def_f
+        x0_pointer = self.dim_f
         for syst_i in self.systematics:
-            s = slice(pointer, pointer + syst_i.n_parameters)
-            vec_x_0[s] = syst_i.baseline_value
-            pointer += syst_i.n_parameters
-        return vec_x_0
+            s = slice(x0_pointer, x0_pointer + syst_i.n_parameters)
+            vec_x_0_def[s] = syst_i.baseline_value
+            x0_pointer += syst_i.n_parameters
+        if size is None:
+            return vec_x_0_def
+
+        pos_x0 = np.ones((size, self.dim_fit_vector), dtype=float)
+        vec_f_x0 = super(LinearModelSystematics, self).generate_fit_x0(
+                vec_g=vec_g,
+                vec_f_0=vec_f_0,
+                size=size)
+        pos_x0[:, :self.dim_f] = vec_f_x0
+        x0_pointer = self.dim_f
+        for sample_x0, _, n_parameters in self.x0_distributions[self.dim_f:]:
+            if n_parameters == 1:
+                x0_slice = x0_pointer
+            else:
+                x0_slice = slice(x0_pointer, x0_pointer + n_parameters)
+            x0_i = vec_x_0_def[x0_slice]
+            if sample_x0 is None:
+                pos_x0_i = x0_i
+            elif isinstance(sample_x0, basestring):
+                if sample_x0 == 'poisson':
+                    pos_x0_i = self.random_state.poisson(x0_i,
+                                                         size=size)
+                else:
+                    raise ValueError(
+                        'Only "poisson" as name for x0 sample'
+                        'dist is implemented')
+            elif callable(sample_x0):
+                pos_x0_i = sample_x0(size=size)
+            pos_x0[:, x0_slice] = pos_x0_i
+            x0_pointer += n_parameters
+        if self.generic_epsilon is not None:
+            for i, factor in enumerate(pos_x0[:, -1]):
+                pos_x0[i, :self.dim_f] /= factor
+        return pos_x0
 
     def generate_fit_bounds(self, vec_g):
         bounds = super(LinearModelSystematics, self).generate_fit_bounds()

@@ -464,7 +464,8 @@ class SystematicLLH(StandardLLH):
             if lnprob_prior is not None:
                 fit_params_slice = slice(fit_params_pointer,
                                          fit_params_pointer + n_parameters)
-                p += lnprob_prior(fit_params[fit_params_slice])
+                prior_value = lnprob_prior(fit_params[fit_params_slice])
+                p += prior_value
             fit_params_pointer += n_parameters
         return p
 

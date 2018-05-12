@@ -1,6 +1,6 @@
 from ._solution import SVDSolution, LLHSolutionMinimizer, LLHSolutionMCMC
 from ._solution import LLHSolutionGradientDescent
-from .likelihood import StandardLLH, StepLLH
+from .likelihood import StandardLLH, StepLLH, SystematicLLH
 from ._dsea import DSEAGaussianNB
 
 
@@ -10,4 +10,5 @@ __all__ = ('SVDSolution',
            'LLHSolutionMCMC',
            'DSEAGaussianNB',
            'StandardLLH',
+           'SystematicLLH',
            'StepLLH')
