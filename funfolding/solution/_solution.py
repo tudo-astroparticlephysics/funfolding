@@ -283,7 +283,6 @@ class LLHSolutionMCMC(Solution):
             pos_x0_i = pos_x0[i, :]
             for x_i in pos_x0_i:
                 s += '\t{:.2f}'.format(x_i)
-            print(s)
         sampler = self.__initiallize_mcmc__()
         sampler.run_mcmc(pos0=pos_x0,
                          nsteps=n_steps,
