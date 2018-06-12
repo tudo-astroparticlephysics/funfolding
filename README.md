@@ -40,28 +40,24 @@ Python library to perform spectral unfoldings.
 
 ### Prerequisites
 
+
 ```
-numpy
-scikit-learn>=0.18.1
-emcee
-scipy
-matplotlib
 corner
-```
-
-Optional:
-
-```
-pymc
+emcee
+matplotlib
+numpy
+pymc3
+scikit-learn>=0.18.1
+scipy
+six
 ```
 
 ### Installing
 
-The library can be simple check out from this github repo and installed via pip
+Install via pip:
 
 ```
-git clone git@github.com:mbrner/funfolding.git
-cd funfolding && pip install .
+pip install https://github.com/tudo-astroparticlephysics/funfolding/archive/master.tar.gz
 ```
 
 ## Running the tests
