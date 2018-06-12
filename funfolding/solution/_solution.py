@@ -6,11 +6,6 @@ from scipy import linalg
 from scipy.optimize import minimize
 
 import emcee
-try:
-    from pymc.diagnostics import effective_n
-    no_pymc = False
-except ImportError:
-    no_pymc = True
 
 from ..model import LinearModel
 from . import error_calculation as ec

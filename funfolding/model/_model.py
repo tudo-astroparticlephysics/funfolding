@@ -880,7 +880,7 @@ class PlaneSytematic(object):
 
     def plot(self, bin_i):
         from matplotlib import pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+        from mpl_toolkits.mplot3d import Axes3D
         if self.coeffs is None:
             raise RuntimeError("No data added yet. Call 'add_data' first.")
         points = self.points[bin_i, :, :]
@@ -900,7 +900,7 @@ class PlaneSytematic(object):
             if y_lim_bounds is not None:
                 y_lim = y_lim_bounds
         fig = plt.figure()
-        ax = plt.subplot(111, projection='3d')
+        ax = Axes3D(fig)
         ax.set_xlim(x_lim[0], x_lim[1])
         ax.set_ylim(y_lim[0], y_lim[1])
         ax.set_xticks(np.unique(points[:, 0]))
