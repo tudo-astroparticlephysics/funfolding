@@ -254,7 +254,10 @@ class LLHSolutionMCMC(Solution):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
 
-        pos_x0 = np.zeros((self.n_walkers, self.model.dim_fit_vector),              dtype=float)
+        pos_x0 = np.zeros(
+            (self.n_walkers, self.model.dim_fit_vector),
+            dtype=float
+        )
 
         llh_pos_x0 = np.zeros(self.n_walkers, dtype=float)
         llh_pos_x0[:] = np.inf * -1.
@@ -353,7 +356,7 @@ class LLHSolutionMCMC(Solution):
         samples = samples[self.n_burn_steps:, :, :]
 
         probs = sampler.get_log_prob()
-        probs = probs[ self.n_burn_steps:, :]
+        probs = probs[self.n_burn_steps:, :]
         if hasattr(self.model, 'transform_vec_fit'):
             samples = self.model.transform_vec_fit(samples)
         return samples, probs

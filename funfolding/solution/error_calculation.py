@@ -134,8 +134,9 @@ def bayesian_parameter_estimation(sample,
     interval_lower = norm.cdf(-sigma) * 100.
     interval_upper = norm.cdf(sigma) * 100.
     upper_limit = norm.cdf(sigma_limits)
-    spectrum = np.percentile(sample,
-                             q=[interval_lower, 50.,interval_upper], axis=0)
+    spectrum = np.percentile(
+        sample, q=[interval_lower, 50., interval_upper], axis=0
+    )
     calc_limit = np.zeros(spectrum.shape[1], dtype=bool)
     calc_limit[:-n_nuissance] = spectrum[0, :-n_nuissance] < precision_f
     spectrum[0, calc_limit] = 0.

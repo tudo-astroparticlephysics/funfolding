@@ -150,11 +150,8 @@ class LinearModel(Model):
             random_state = np.random.RandomState(random_state)
         self.random_state = random_state
 
-
     def initialize(self, digitized_obs, digitized_truth, sample_weight=None):
-        """
-
-        """
+        """"""
         super(LinearModel, self).initialize()
         self.range_obs = (min(digitized_obs), max(digitized_obs))
         self.range_truth = (min(digitized_truth), max(digitized_truth))
@@ -245,7 +242,6 @@ class LinearModel(Model):
         wiggle = np.absolute(self.random_state.normal(size=pos_x0.shape))
         pos_x0 += wiggle
         return pos_x0
-
 
     def generate_fit_bounds(self, vec_g):
         """Generates a bounds for a minimization.
@@ -395,9 +391,11 @@ class PolynominalSytematic(object):
                 return 1.
 
         elif hasattr(prior, 'pdf'):
-            prior_pdf = lambda x: sum(prior.pdf(x))
+            def prior_pdf(x):
+                return sum(prior.pdf(x))
         elif callable(prior):
-            prior_pdf = lambda x: sum(prior(x))
+            def prior_pdf(x):
+                return sum(prior(x))
         else:
             raise TypeError('The provided prior has to be None, '
                             'scipy.stats frozen rv or callable!')
@@ -408,7 +406,7 @@ class PolynominalSytematic(object):
     def lnprob_prior(self, x):
         if self.bounds(x):
             pdf_val = self.prior_pdf(x)
-            if pdf_val >  0.:
+            if pdf_val > 0.:
                 return np.log(pdf_val)
             else:
                 return np.inf * -1
@@ -621,7 +619,7 @@ class CircularSystematic(object):
     def lnprob_prior(self, x):
         if self.bounds(x):
             pdf_val = self.prior_pdf(x)
-            if pdf_val >  0.:
+            if pdf_val > 0.:
                 return np.log(pdf_val)
             else:
                 return np.inf * -1
@@ -782,9 +780,11 @@ class PlaneSytematic(object):
             def prior_pdf(x):
                 return 1.
         elif hasattr(prior, 'pdf'):
-            prior_pdf = lambda x: sum(prior.pdf(x))
+            def prior_pdf(x):
+                return sum(prior.pdf(x))
         elif callable(prior):
-            prior_pdf = lambda x: sum(prior(x))
+            def prior_pdf(x):
+                return sum(prior(x))
         else:
             raise TypeError('The provided prior has to be None, '
                             'scipy.stats frozen rv or callable!')
@@ -1144,9 +1144,10 @@ class LinearModelSystematics(LinearModel):
 
     def generate_fit_x0(self, vec_g, vec_f_0=None, size=None):
         vec_f_0_def_f = super(LinearModelSystematics, self).generate_fit_x0(
-                vec_g=vec_g,
-                vec_f_0=vec_f_0,
-                size=None)
+            vec_g=vec_g,
+            vec_f_0=vec_f_0,
+            size=None,
+        )
         vec_x_0_def = np.ones(self.dim_fit_vector, dtype=float)
         vec_x_0_def[:self.dim_f] = vec_f_0_def_f
         x0_pointer = self.dim_f
@@ -1159,9 +1160,10 @@ class LinearModelSystematics(LinearModel):
 
         pos_x0 = np.ones((size, self.dim_fit_vector), dtype=float)
         vec_f_x0 = super(LinearModelSystematics, self).generate_fit_x0(
-                vec_g=vec_g,
-                vec_f_0=vec_f_0,
-                size=size)
+            vec_g=vec_g,
+            vec_f_0=vec_f_0,
+            size=size,
+        )
         pos_x0[:, :self.dim_f] = vec_f_x0
         x0_pointer = self.dim_f
         for sample_x0, _, n_parameters in self.x0_distributions[self.dim_f:]:
@@ -1277,7 +1279,7 @@ class TestModelSystematics(LinearModelSystematics):
 
     def generate_fit_bounds(self, vec_g, max_factor=3.):
         n_events = np.sum(vec_g)
-        bounds = [(0., n_events  * max_factor)]
+        bounds = [(0., n_events * max_factor)]
         for i, syst_i in enumerate(self.systematics):
             bounds.append(syst_i.bounds)
         return bounds
