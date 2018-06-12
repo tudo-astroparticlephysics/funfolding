@@ -1,19 +1,15 @@
 import warnings
-import sys
 
 import numpy as np
 from scipy import linalg
 from scipy.optimize import minimize
+import six
 
 import emcee
 
 from ..model import LinearModel
 from . import error_calculation as ec
 from .likelihood import StandardLLH, StepLLH
-
-
-if sys.version_info[0] > 2:
-    basestring = str
 
 
 class Solution(object):
@@ -324,7 +320,7 @@ class LLHSolutionMCMC(Solution):
                     sigma_limits=error_interval_sigma_limits,
                     n_nuissance=self.model.n_nuissance_parameters)
         if thin is not None:
-            if isinstance(thin, basestring):
+            if isinstance(thin, six.string_types):
                 if thin.lower() == 'autocorr':
                     thin = int(np.max(autocorr_time[0]) + 0.5)
             if isinstance(thin, int):
@@ -342,7 +338,6 @@ class LLHSolutionMCMC(Solution):
             probs = probs_flat
 
         return vec_fit_params, sigma_vec_f, sample, probs, autocorr_time
-
 
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,

@@ -1,11 +1,7 @@
-import sys
 import numpy as np
+import six
 
 from ..model import LinearModel, Model
-
-
-if sys.version_info[0] > 2:
-    basestring = str
 
 
 def create_C_thikonov(n_dims,
@@ -112,7 +108,7 @@ class StandardLLH(LLH):
 
         if self.tau is None:
             self._tau = None
-        elif isinstance(self.tau, basestring):
+        elif isinstance(self.tau, six.string_types):
             if self._tau.lower() == 'None':
                 self._tau = None
         else:
@@ -146,7 +142,7 @@ class StandardLLH(LLH):
                                  "callable!")
             if self._tau is not None:
                 m_C = None
-                if isinstance(self.C, basestring):
+                if isinstance(self.C, six.string_types):
                     if self.C.lower() == 'thikonov' or self.C.lower() == '2':
                         m_C = create_C_thikonov(
                             eff_f_length)
