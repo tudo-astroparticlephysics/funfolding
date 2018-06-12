@@ -1,24 +1,15 @@
 import warnings
-import sys
 
 import numpy as np
 from scipy import linalg
 from scipy.optimize import minimize
+import six
 
 import emcee
-try:
-    from pymc.diagnostics import effective_n
-    no_pymc = False
-except ImportError:
-    no_pymc = True
 
 from ..model import LinearModel
 from . import error_calculation as ec
 from .likelihood import StandardLLH, StepLLH
-
-
-if sys.version_info[0] > 2:
-    basestring = str
 
 
 class Solution(object):
@@ -263,7 +254,10 @@ class LLHSolutionMCMC(Solution):
         super(LLHSolutionMCMC, self).fit()
         n_steps = self.n_used_steps + self.n_burn_steps
 
-        pos_x0 = np.zeros((self.n_walkers, self.model.dim_fit_vector),              dtype=float)
+        pos_x0 = np.zeros(
+            (self.n_walkers, self.model.dim_fit_vector),
+            dtype=float
+        )
 
         llh_pos_x0 = np.zeros(self.n_walkers, dtype=float)
         llh_pos_x0[:] = np.inf * -1.
@@ -329,7 +323,7 @@ class LLHSolutionMCMC(Solution):
                     sigma_limits=error_interval_sigma_limits,
                     n_nuissance=self.model.n_nuissance_parameters)
         if thin is not None:
-            if isinstance(thin, basestring):
+            if isinstance(thin, six.string_types):
                 if thin.lower() == 'autocorr':
                     thin = int(np.max(autocorr_time[0]) + 0.5)
             if isinstance(thin, int):
@@ -348,7 +342,6 @@ class LLHSolutionMCMC(Solution):
 
         return vec_fit_params, sigma_vec_f, sample, probs, autocorr_time
 
-
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,
                                      ndim=self.model.dim_fit_vector,
@@ -363,7 +356,7 @@ class LLHSolutionMCMC(Solution):
         samples = samples[self.n_burn_steps:, :, :]
 
         probs = sampler.get_log_prob()
-        probs = probs[ self.n_burn_steps:, :]
+        probs = probs[self.n_burn_steps:, :]
         if hasattr(self.model, 'transform_vec_fit'):
             samples = self.model.transform_vec_fit(samples)
         return samples, probs

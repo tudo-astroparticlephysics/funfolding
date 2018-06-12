@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.stats import norm
 
 
 def get_A_migrate_expample(shape, std=1, n_samples=1e4):
@@ -14,6 +13,7 @@ def get_A_migrate_expample(shape, std=1, n_samples=1e4):
                                          size=int(n_samples))
         A[i, :] = np.histogram(random_sample, y_binning)[0]
     return norm_A(A)
+
 
 def norm_A(A):
     M_norm = np.diag(1 / np.sum(A, axis=0))

@@ -10,7 +10,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='funfolding',
-    version='0.0.1',
+    version='0.0.2',
 
     description='Having fun with unfolding.',
     long_description=long_description,
@@ -36,14 +36,16 @@ setup(
     keywords='unfolding',
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=[
-        'numpy',
-        'scikit-learn>=0.18.1',
+        'corner',
         'emcee',
-        'pymc3',
-        'scipy',
-        'futures',
         'matplotlib',
-        'corner'],
+        'numpy',
+        'pymc3',
+        'scikit-learn>=0.18.1',
+        'scipy',
+        'six>=1.1',
+    ],
+    extras_require={':python_version == "2.7"': ['futures']},
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
 )
