@@ -1,5 +1,4 @@
-FUNFOLDING [![Build Status](https://travis-ci.org/mbrner/funfolding.svg?branch=master)](https://travis-ci.org/mbrner/funfolding)
-===========
+# FUNFOLDING [![Build Status](https://travis-ci.com/tudo-astroparticlephysics/funfolding.svg?branch=master)](https://travis-ci.com/tudo-astroparticlephysics/funfolding)
 
 ```
          _____
