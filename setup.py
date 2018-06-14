@@ -10,12 +10,13 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='funfolding',
-    version='0.0.2',
+    version='0.1.0',
 
     description='Having fun with unfolding.',
     long_description=long_description,
+    long_description_content_type='text/markdown',
 
-    url='https://github.com/mbrner/funfolding',
+    url='https://github.com/tudo-astroparticlephysics/funfolding',
 
     author='Mathis Boerner',
     author_email='mathis.boerner@tu-dortmund.de',
