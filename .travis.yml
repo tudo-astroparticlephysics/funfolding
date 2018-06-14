@@ -20,13 +20,14 @@ script:
   - python setup.py test
 
 deploy:
-- provider: pypi
-  skip_cleanup: true
-  distributions: sdist
-  user: tudo-app
-  password: 
-    secure: XYRjIvdT7/xiw+eG7x31dt90JgkwaiYbhM3u3hsSW+Ol4WjiwahHiIre8xYalrcPupUN+k5p5E6SKRjc+cXHqdcPGElxERpb/axlY0Q+8x6YRWhO7Ts7ODN9H9rAt8blyvRS/oknkxr64GzHt6U1S8//Iwh66YNA5xVrzvbnLKMZQVVDnQQPFAMhD23CRU1oKYSOxFZCN+r+boYXqbhjGKr9rzABcMbmyDMmiEpfM8W+tKPAwsQ8AaxaVrIFZNXXtQx748FXOvPAg2cwjF83X+OMvXUVb+EzdIpRN+v27JWFPao0eqDJ/OsuYvfHRi0h3uUNMq6Q9PfGqDaRX8bkofWldFXNuoi9FmcwI5fc0sFXLWCNOt5vKn+qQ5de8zi16/iXReG+NCS4KcP7319+WPbasAXgXXMjVBIUxqT6ONtKyQrCrhBLJ72mTWMtmAAWVw5YYU2e2gca42uVbQ17kmrl20bvRoeydsBGNcAXMMJNkTSeSpkGhdM6LMhjSx0epkueR9krhNo3+JlXr7QCuaSMvRgV156kuvdu+WFFQJod8R4qJqArONkVjb6+ltcyQyimgh7GzJoZDNIRl5eLyUp2C8qKjIMXm+QFU+usBjXomYoXB9dHlHchJBXAChcrcvhfSZBMSZ2cynlk6Ds4DYiZIxgdfO0OI622iCyMymc=
-  on:
-    branch: master
-    tags: true
-    condition: $TRAVIS_PYTHON_VERSION = "3.6"
+  matrix:
+  - provider: pypi
+    skip_cleanup: true
+    distributions: sdist
+    user: tudo-app
+    on:
+      branch: master
+      tags: true
+      condition: $TRAVIS_PYTHON_VERSION = "3.6"
+  password:
+    secure: XQ9xd9/ALxyw1aqKgVCRktDRfPXsqX0QOKRg267hYhjMj6ycgP1JyN6BzCBx1bhhte5L/KGFvoEI+liGkezOh39lMzAW1SlQdi6L4xGDv1jTbGfjRviF0yniVXXx7PFnRO1M2b0IyxJRd49yWr66fJBmc7bM0szS56zakG5AL7QF1lWJ2V9EjXOAG5oANxhleHBhw41P6WgI7Z1IaojZAKb862++gsBE0TzVaVUSDRHXjo4md/ZZ9uxojULBMam6Lr+U1o1TPGCKirAGVaVzZo4xUh+/qrTHKpAQFmNUoa2j7NELmFpYdyymxJcFNw+OIQZk/AFVbeZe2oyjOgwAFQh89kXbBQhGcIsqOnaQxxPq01BtFAzopmacrmR7JkJBGDEJllHdAGhJUgAuZa5c1cQLPmxgnYeRuP79CjUdRHkB0OGeCPUxETph+B96gipDkSrrIOHdXXTNOI05Ew9vor7P0KaywjDm9gyI4nwBq3c6WXJNe0d4Ne9LpIsbwhzXW3v5eVB9+QH0RAwGm/An1ngMcz0+zBcqnKonsFtVuMIIYH9X8Y+1c5uSOXDZ6kNh8XR+Gg2mAUMfFi4Iq2XqE7HV7BP2/Pjx/n4Sx3RPLy8NRGA743WWOa8/GbiLodXB1zsvCNbHNFKjC+I2TihVGCpzlhE16TsM1xnFR0qNm20=
