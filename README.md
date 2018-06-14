@@ -56,7 +56,7 @@ six
 Install via pip:
 
 ```
-pip install https://github.com/tudo-astroparticlephysics/funfolding/archive/master.tar.gz
+pip install funfolding
 ```
 
 ## Running the tests
