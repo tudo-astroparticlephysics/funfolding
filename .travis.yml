@@ -23,7 +23,6 @@ deploy:
 - provider: pypi
   skip_cleanup: true
   distributions: sdist
-  server: https://pypi.python.org/pypi
   user: tudo-app
   password: 
     secure: XYRjIvdT7/xiw+eG7x31dt90JgkwaiYbhM3u3hsSW+Ol4WjiwahHiIre8xYalrcPupUN+k5p5E6SKRjc+cXHqdcPGElxERpb/axlY0Q+8x6YRWhO7Ts7ODN9H9rAt8blyvRS/oknkxr64GzHt6U1S8//Iwh66YNA5xVrzvbnLKMZQVVDnQQPFAMhD23CRU1oKYSOxFZCN+r+boYXqbhjGKr9rzABcMbmyDMmiEpfM8W+tKPAwsQ8AaxaVrIFZNXXtQx748FXOvPAg2cwjF83X+OMvXUVb+EzdIpRN+v27JWFPao0eqDJ/OsuYvfHRi0h3uUNMq6Q9PfGqDaRX8bkofWldFXNuoi9FmcwI5fc0sFXLWCNOt5vKn+qQ5de8zi16/iXReG+NCS4KcP7319+WPbasAXgXXMjVBIUxqT6ONtKyQrCrhBLJ72mTWMtmAAWVw5YYU2e2gca42uVbQ17kmrl20bvRoeydsBGNcAXMMJNkTSeSpkGhdM6LMhjSx0epkueR9krhNo3+JlXr7QCuaSMvRgV156kuvdu+WFFQJod8R4qJqArONkVjb6+ltcyQyimgh7GzJoZDNIRl5eLyUp2C8qKjIMXm+QFU+usBjXomYoXB9dHlHchJBXAChcrcvhfSZBMSZ2cynlk6Ds4DYiZIxgdfO0OI622iCyMymc=
