@@ -278,7 +278,7 @@ class LLHSolutionMCMC(Solution):
             for x_i in pos_x0_i:
                 s += '\t{:.2f}'.format(x_i)
         sampler = self.__initiallize_mcmc__()
-        sampler.run_mcmc(pos0=pos_x0,
+        sampler.run_mcmc(initial_state=pos_x0,
                          nsteps=n_steps,
                          rstate0=self.random_state.get_state())
         try:
@@ -348,7 +348,7 @@ class LLHSolutionMCMC(Solution):
                                      log_prob_fn=self.llh)
 
     def __run_mcmc__(self, sampler, x0, n_steps):
-        sampler.run_mcmc(pos0=x0,
+        sampler.run_mcmc(initial_state=x0,
                          nsteps=n_steps,
                          rstate0=self.random_state.get_state())
 

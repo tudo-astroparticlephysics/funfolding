@@ -10,7 +10,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='funfolding',
-    version='0.1.0',
+    version='0.1.1',
 
     description='Having fun with unfolding.',
     long_description=long_description,
@@ -38,7 +38,7 @@ setup(
     packages=find_packages(exclude=['contrib', 'docs', 'tests']),
     install_requires=[
         'corner',
-        'emcee',
+        'emcee>2.2.1',
         'matplotlib',
         'numpy',
         'pymc3',

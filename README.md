@@ -39,6 +39,12 @@ Python library to perform spectral unfoldings.
 
 ### Prerequisites
 
+You will need the development version of emcee, install using
+
+```
+pip install https://github.com/dfm/emcee/archive/master.tar.gz
+```
+
 
 ```
 corner
