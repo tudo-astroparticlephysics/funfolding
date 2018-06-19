@@ -1,4 +1,5 @@
 language: python
+
 python:
   - '3.5'
   - '3.6'
@@ -23,11 +24,11 @@ script:
 deploy:
   provider: pypi
   user: tudo-app
-  password:
-    secure: "V3wJfPviiGLr3uxFwWOcq3corYHtQgaIe9XEOyVb6N+TR9pXsad/hz3uWMDPAnaMoSJMcXPMyEAfZKeJRQTAJ6fIEqW3Bo1RTeo56uQr//yY42KgNlIIEfykCR7gRdbahGnUAW2CLlhMBI9k+LTlI38TCdaH3FhUWBq++a4UZI/o0yS7wHlhxRtHMMRI74hzGHUsI1mK+CD+hAWtF6cpugs5JIDJ3wdIZuv9jcchHib18sTas+4LlvPlCC+C9SAfbrzY5cPg+uxHGPP2eOxiqWgP96U8YsTAbdIbW4TnpTwAXyX3xkfzTce00eaX1fgtlh1AhFdcJM3cmbeKGA+hURrJjXB656YNpKvsLsF87iSkWICNbioHLA9la35r5ozHiWOqrh77HoyiolcHKGvIlWAOBGCsBtjQgAjeG+0DMF+S1rOLTfjFuhooWGzMbo4TDHE7v8tzoZLYZ9IwierPVsA+r4RKkisTTF0nhbN6TZ8EPm9MaVmCs5UOSA2ieE40joqJ5NJTLWHVhc+qwC5NRgbOTLcCiRwL3OdYg3rwEk41377EYRrXlLAnja2qPCcv9H1+Qn9mQxINE4XOi9xChtsKYLHVckJ8kwVHk9DoftodIXy4MZJjSdx3aTgkZ3UERKlGCxtaQZBW0pz4aevvAua5XLAQzLctdSsYfCSZSNE="
   skip_cleanup: true
   distributions: sdist
   on:
     branch: master
     tags: true
     condition: $TRAVIS_PYTHON_VERSION = "3.6"
+  password:
+    secure: NMxrfT2lnJQELuFER0ZV+lCeD4wwVgiG3Q42udrSGc8PX5I5ePBPFu0m9srHjhYwTXJ9Gmj+p+2Cw21X8aG/ZA0wcZVsALsJE1WWlJh5FV71RYv8qHi4N3xHKhsqnqJC9hvtbWKuRbizwPUqwkJpPNodOWpIhQvsQVtS6gBooAsYSz44Wv+wIzKGOur2LNUShBmiUKAB79fxyyxWtFYHUa32KUMTz1VjPe1a23CXYBbKHJZ+1wNHc6GKJrRDJBXv2Z6bCGKywTxMoGGRly2Yum8mxYrd10h3neD5UJPW+fxb4bBDXznTnGd54m3GRPrXrd+YvHc4ZlKkohjD1pU3D9N2HT5t2++BNHnMDN+0vgJDV3ns1prHAl4BAq5tnS9RGqC04VMB+g7lDEJ/77vu1X7EG0BHnMx/ZAnZJI+LgxjM578w2zvEtV93GWcjCRfBiPXKlv+BMll5VtwtImfZaUZWU5uCLZ8cWD9FGOBZNISwR2f8NzJ2U5tBup5ZEN45pOqtlUSLBXpRGMStnqf2+l189dICgrn23mKB1T3hYdJZnq24UOa9wm3tO1cEx2xboxxbyIRzktw7HP6J+3MWy+J5eFiCu40+uftPTclbgMYDAvqn859dUJ6x8Kf3443tmV0GpLpD0XiTCgfkEOfVhCcX0btdiYRaFGS23kT+LtU=
