@@ -1,4 +1,4 @@
-# FUNFOLDING [![Build Status](https://travis-ci.com/tudo-astroparticlephysics/funfolding.svg?branch=master)](https://travis-ci.com/tudo-astroparticlephysics/funfolding)
+# FUNFOLDING [![Build Status](https://travis-ci.com/tudo-astroparticlephysics/funfolding.svg?branch=master)](https://travis-ci.com/tudo-astroparticlephysics/funfolding) [![PyPI version](https://badge.fury.io/py/funfolding.svg)](https://badge.fury.io/py/funfolding)
 
 ```
          _____
