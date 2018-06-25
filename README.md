@@ -39,16 +39,9 @@ Python library to perform spectral unfoldings.
 
 ### Prerequisites
 
-You will need the development version of emcee, install using
-
+The prerequesites are handled by the `setup.py`, if you are using conda, you might
+want to install the available packages via `conda` first.
 ```
-pip install https://github.com/dfm/emcee/archive/master.tar.gz
-```
-
-
-```
-corner
-emcee
 matplotlib
 numpy
 pymc3
