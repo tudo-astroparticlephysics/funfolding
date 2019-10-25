@@ -374,7 +374,7 @@ class ClassicBinning(Binning):
                 if upper_edge is None:
                     upper_edge = lower_edge + mean_diff[i]
                 if lower_edge is None:
-                        lower_edge = upper_edge - mean_diff[i]
+                    lower_edge = upper_edge - mean_diff[i]
                 cog[i, j] = (upper_edge + lower_edge) / 2.
         return np.mean(cog, axis=1)
 

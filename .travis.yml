@@ -1,17 +1,13 @@
 language: python
 python:
-- '3.5'
 - '3.6'
-- '2.7'
+- '3.7'
+# - '3.8'  # wait until scipy has a wheel
 before_install:
-- export DISPLAY=:99.0
-- sh -e /etc/init.d/xvfb start
-- sudo rm -rf /dev/shm
-- sudo ln -s /run/shm /dev/shm
+- export MPLBACKEND=agg
 - pip install --upgrade pip
 install:
 - pip install flake8
-- pip install https://github.com/dfm/emcee/archive/master.tar.gz
 - pip install .
 script:
 - flake8 funfolding
@@ -24,6 +20,6 @@ deploy:
   on:
     branch: master
     tags: true
-    condition: $TRAVIS_PYTHON_VERSION = "3.6"
+    condition: $TRAVIS_PYTHON_VERSION = "3.7"
   password:
     secure: Qn9fmw4+/4HQtGKF4sryc/bkogJoAiunFADzPySn4MJqumgcJMgZf0FKyFgo09axCs+c9ZcraVL4cR5gLksbPUJthfjxmxXhpkQ1Q/spIQXx+5Ylif6CzaJcVqDRpsOdZfsFPtYloAoKOGHi3nJHdyL6THYI5QB44vWWymbaP9256/3dDgI0zwa00mT+Jq4ImpOXcTbHeYEmtdFZmigU7MnF3nQTIemGLysFViAeej0wW4HYg+7coddve6TeEq2nXNOZMXhfzsoxUHTDERrre/D8OFpmtyOjhykRAqTV4+a3vNjZOmIdD4qYWlp8IiRnjxqekVczR0d022azmLEU0DeNz/YFjL5HImm3KrakqWvqPBuh9vszgNshy446ZNzd3VG09d0jkEPDmg93ZHEcM+czD6aBPoCZ8TY9PeP1J+UBgLIgUy0RzZGBumEtaGwmA5WXDpWym13pnw4rYJdQHG0d3UdJXOr18TB0WB7Efn/AiwfmEfH099CbNvvbIjyhIpm2eOn7PHHVf72PfyUr/cwds82QcwDcNS8n5VVhy9lSZawmAQNz4gTr+TfIyWbO5GjGJCyZJAxZSRZDCqpC8f8USGh4X98F+fs9o47XcARbq+1XMBYC99xUr6LP8jLawG4EOAr2Iq8LSVDL1kfSpbZOydNBW4SbC1IHN0BW0dA=
