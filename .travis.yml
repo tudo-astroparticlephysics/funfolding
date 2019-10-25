@@ -2,7 +2,7 @@ language: python
 python:
 - '3.6'
 - '3.7'
-- '3.8'
+# - '3.8'  # wait until scipy has a wheel
 before_install:
 - export MPLBACKEND=agg
 - pip install --upgrade pip
