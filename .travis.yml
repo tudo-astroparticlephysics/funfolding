@@ -2,7 +2,6 @@ language: python
 python:
 - '3.6'
 - '3.7'
-# - '3.8'  # wait until scipy has a wheel
 before_install:
 - export MPLBACKEND=agg
 - pip install --upgrade pip
@@ -14,7 +13,7 @@ script:
 - python setup.py test
 deploy:
   provider: pypi
-  user: tudo-app
+  user: "__token__"
   skip_cleanup: true
   distributions: sdist
   on:
@@ -22,4 +21,4 @@ deploy:
     tags: true
     condition: $TRAVIS_PYTHON_VERSION = "3.7"
   password:
-    secure: Qn9fmw4+/4HQtGKF4sryc/bkogJoAiunFADzPySn4MJqumgcJMgZf0FKyFgo09axCs+c9ZcraVL4cR5gLksbPUJthfjxmxXhpkQ1Q/spIQXx+5Ylif6CzaJcVqDRpsOdZfsFPtYloAoKOGHi3nJHdyL6THYI5QB44vWWymbaP9256/3dDgI0zwa00mT+Jq4ImpOXcTbHeYEmtdFZmigU7MnF3nQTIemGLysFViAeej0wW4HYg+7coddve6TeEq2nXNOZMXhfzsoxUHTDERrre/D8OFpmtyOjhykRAqTV4+a3vNjZOmIdD4qYWlp8IiRnjxqekVczR0d022azmLEU0DeNz/YFjL5HImm3KrakqWvqPBuh9vszgNshy446ZNzd3VG09d0jkEPDmg93ZHEcM+czD6aBPoCZ8TY9PeP1J+UBgLIgUy0RzZGBumEtaGwmA5WXDpWym13pnw4rYJdQHG0d3UdJXOr18TB0WB7Efn/AiwfmEfH099CbNvvbIjyhIpm2eOn7PHHVf72PfyUr/cwds82QcwDcNS8n5VVhy9lSZawmAQNz4gTr+TfIyWbO5GjGJCyZJAxZSRZDCqpC8f8USGh4X98F+fs9o47XcARbq+1XMBYC99xUr6LP8jLawG4EOAr2Iq8LSVDL1kfSpbZOydNBW4SbC1IHN0BW0dA=
+    secure: RlZg6qNTs8GU0JZD3h1RBKOFDeCkZQgX3YohoVr8/WislImaslb2HzvTjSq8cO9IlRNIQ+O1728vNod3tokMDOT1w3bv6y9BDrQCgWveHyjhBmXPa47G9ZISGFczea66rNcGd6bNX4l5FreMFS8A1wNkNmF8QWzueLHQOFQn8cWmfYPf8dVPkvtDNTSUEfIXh2lPy9RYdXsrWsucdHqL5qVeTuNW2g9eYkBY0QGOjd5aqMpdUouDgYx2ztTNpfHdfytX5uO4u9pzYjTWZzulnN0XOQUySnGeMyreRbpnd3C6q7CDLQ02pckmLt0S7yscRcShN4FfvZf1lk/zaHQG2SbpwCdN34EcLcb9iuDdcNhwpCkLCfHTCsdPWbmDbTjeZ0+VllTFCIqT25RoSLLorpjGCvaN2Gnrj5g/N8qOvrS6+dyk9Z4ZIPFS7k2pPBMmTV9hZEqTUy+cEkKJKLygPDo1b081WGzAUOaA4HAwoNB8PKfUAY03Al+NPYPd0wWa7Rre97u0kX0T7DM2HmLa9htZUlqrQlHuSszbDdtKb+b3+fZWVGq4bz+ya8guBYNdtoq+B0GoZ9Fog9BqkSHx40aTWgFYd+LwMb5NHpC2cr4Vp7Oo3bMlCcupBKNb4K/MxxtS3KpN7HJYTXJdjtgwjy5ndxlwqvgY458ESWY8kss=
