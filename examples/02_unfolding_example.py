@@ -97,7 +97,7 @@ if __name__ == '__main__':
 
     llh = ff.solution.StandardLLH(tau=None,
                                   C='thikonov',
-                                  neg_llh=False)
+                                  )
     llh.initialize(vec_g=vec_g,
                    model=model)
 
@@ -105,7 +105,7 @@ if __name__ == '__main__':
                                            random_state=1337)
     sol_mcmc.initialize(llh=llh, model=model)
     sol_mcmc.set_x0_and_bounds()
-    vec_f_est_mcmc, sigma_vec_f, samples, probs = sol_mcmc.fit()
+    vec_f_est_mcmc, sigma_vec_f, samples, probs, autocorrelation = sol_mcmc.fit()
     str_0 = 'unregularized:'
     str_1 = ''
     for f_i_est, f_i in zip(vec_f_est_mcmc, vec_f):
@@ -113,9 +113,7 @@ if __name__ == '__main__':
     print('{}\t{}'.format(str_0, str_1))
 
     print('\nMinimize Solution:')
-    llh = ff.solution.StandardLLH(tau=None,
-                                  C='thikonov',
-                                  neg_llh=True)
+    llh = ff.solution.StandardLLH(tau=None, C='thikonov')
     llh.initialize(vec_g=vec_g,
                    model=model)
 
