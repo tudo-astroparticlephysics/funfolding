@@ -60,7 +60,6 @@ def do_single_pull(obs_array_binning,
 
     llh = solution.StandardLLH(tau=tau,
                                log_f=True,
-                               vec_acceptance=vec_acceptance,
                                C='thikonov')
     llh.initialize(vec_g=vec_g,
                    model=tree_model)
@@ -83,7 +82,7 @@ def do_single_pull(obs_array_binning,
     sol_mini = solution.LLHSolutionMinimizer()
     sol_mini.initialize(llh=llh, model=tree_model)
     sol_mini.set_x0_and_bounds(x0=x[idx_best])
-    best_fit, _ = sol_mini.fit(constrain_N=False)[0]
+    best_fit = sol_mini.fit(constrain_N=False)[0]
 
     vec_f_str = ', '.join('{0:.2f}'.format(a)
                           for a in best_fit.x)
@@ -97,7 +96,7 @@ def do_single_pull(obs_array_binning,
                                         random_state=random_state)
     sol_mcmc.initialize(llh=llh, model=tree_model)
     sol_mcmc.set_x0_and_bounds(x0=best_fit.x)
-    vec_f_est_mcmc, sigma_vec_f, sample, probs = sol_mcmc.fit()
+    vec_f_est_mcmc, sigma_vec_f, sample, probs, autocorrelation = sol_mcmc.fit()
 
     vec_f_str = ', '.join('{0:.2f}'.format(a)
                           for a in vec_f_est_mcmc)
