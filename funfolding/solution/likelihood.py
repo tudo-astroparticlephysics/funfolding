@@ -229,19 +229,11 @@ class StandardLLH(LLH):
         h_unreg -= part_b
         if self._tau is not None:
             if self.log_f_reg:
-                reg_part = np.zeros(self.model.dim_f)
                 denom_f = f_reg + self.log_f_offset
                 nom_f = np.log(denom_f * self.reg_factor_f)
                 ln_10_squared = np.log(10)**2
-                pre = np.zeros((self.model.dim_f,
-                                self.model.dim_f))
-                for i in range(self.model.dim_f):
-                    for j in range(self.model.dim_f):
-                        pre[i, j] = self._C[i, j] * nom_f[i]
-                        pre[i, j] /= ln_10_squared * denom_f[i]
-                for i in range(self.model.dim_f):
-                    reg_part[i] = np.sum(pre[i, :])
-                    reg_part[i] += np.sum(pre[:, i])
+                pre = self._C / ln_10_squared * np.broadcast_to(nom_f / denom_f, np.shape(_C)).T
+                reg_part = np.sum(pre, axis=0) + np.sum(pre, axis=1)
             else:
                 reg_part = np.dot(self._C, f_reg * self.reg_factor_f)
         else:
