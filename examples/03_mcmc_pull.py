@@ -77,13 +77,12 @@ if __name__ == '__main__':
         binned_f = np.digitize(unbinned_f, binning_f)
         vec_g, vec_f = model.generate_vectors(binned_g, binned_f)
         llh = ff.solution.StandardLLH(tau=None,
-                                      C='thikonov',
-                                      neg_llh=False)
+                                      C='thikonov',)
         llh.initialize(vec_g=vec_g,
                        model=model)
 
         sol_mcmc = ff.solution.LLHSolutionMCMC()
         sol_mcmc.initialize(llh=llh, model=model)
         sol_mcmc.set_x0_and_bounds()
-        vec_f_est_mcmc, sigma_vec_f, samples, probs = sol_mcmc.fit()
+        vec_f_est_mcmc, sigma_vec_f, samples, probs, autocorrelation = sol_mcmc.fit()
         print(vec_f_est_mcmc)
