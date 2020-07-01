@@ -231,9 +231,7 @@ class StandardLLH(LLH):
             if self.log_f_reg:
                 denom_f = f_reg + self.log_f_offset
                 nom_f = np.log(denom_f * self.reg_factor_f)
-                ln_10_squared = np.log(10)**2
-                pre = self._C / ln_10_squared * np.broadcast_to(
-                    nom_f / denom_f, np.shape(self._C)).T
+                pre = (self._C.T * (nom_f / denom_f)).T / np.log(10)**2
                 reg_part = np.sum(pre, axis=0) + np.sum(pre, axis=1)
             else:
                 reg_part = np.dot(self._C, f_reg * self.reg_factor_f)
@@ -378,18 +376,15 @@ class LLHThikonovForLoops(LLH):
     def evaluate_hessian(self, f):
         m, n = self.linear_model.A.shape
         hess = np.zeros((n, n))
-        for k in range(n):
-            for l in range(n):
+        denominator = np.dot(self.linear_model.A, f)
+        for i in range(n):
+            for j in range(n):
                 poisson_part = 0
-                for i in range(m):
-                    A_ik = self.linear_model.A[i, k]
-                    A_il = self.linear_model.A[i, l]
-                    nominator = self.g[i] * A_ik * A_il
-                    denominator = 0
-                    for j in range(n):
-                        denominator += self.linear_model.A[i, j] * f[j]
-                    poisson_part += nominator / denominator**2
-                hess[k, l] = poisson_part + self.tau * self.C[k, l]
+                A_i = self.linear_model.A[:, i]
+                A_j = self.linear_model.A[:, j]
+                nominator = self.g * A_i * A_j
+                poisson_part = np.sum(nominator / denominator**2)
+                hess[i, j] = poisson_part + self.tau * self.C[i, j]
         return hess
 
 
