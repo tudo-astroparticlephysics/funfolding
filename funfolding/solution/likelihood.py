@@ -232,7 +232,8 @@ class StandardLLH(LLH):
                 denom_f = f_reg + self.log_f_offset
                 nom_f = np.log(denom_f * self.reg_factor_f)
                 ln_10_squared = np.log(10)**2
-                pre = self._C / ln_10_squared * np.broadcast_to(nom_f / denom_f, np.shape(_C)).T
+                pre = self._C / ln_10_squared * np.broadcast_to(
+                    nom_f / denom_f, np.shape(self._C)).T
                 reg_part = np.sum(pre, axis=0) + np.sum(pre, axis=1)
             else:
                 reg_part = np.dot(self._C, f_reg * self.reg_factor_f)
