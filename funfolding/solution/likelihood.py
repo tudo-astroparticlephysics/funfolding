@@ -127,16 +127,16 @@ class StandardLLH(LLH):
             elif callable(self.tau):
                 self._tau = self.tau(np.arange(model.dim_f))
                 self._tau = self._tau[self._f_slice]
-            elif isinstance(self.tau, np.array) or \
+            elif isinstance(self.tau, type(np.array([]))) or \
                     isinstance(self.tau, list) or \
                     isinstance(self.tau, tuple):
-                if len(self.tau) == model.dim_f:
+                if len(self.tau) == eff_f_length:
                     self._tau = np.array(self.tau)
                 else:
                     raise ValueError(
                         "Length of 'tau'={} invalid! {} needed".format(
                             len(self.tau),
-                            model.dim_f))
+                            eff_f_length))
             else:
                 raise ValueError("'tau' as to be either None, float, array or "
                                  "callable!")

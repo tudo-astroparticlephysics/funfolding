@@ -220,7 +220,7 @@ class LinearModel(Model):
             else:
                 vec_f_0 = np.ones(n) * np.sum(vec_g) / n
         if size is None:
-            return vec_f_0
+            return vec_f_0[:n]
         pos_x0 = np.ones((size, n), dtype=float)
         x0_pointer = 0
         for (sample_x0, _, n_parameters) in self.x0_distributions[:self.dim_f]:
