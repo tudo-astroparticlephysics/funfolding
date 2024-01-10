@@ -8,6 +8,10 @@ on:
       - "**"
   pull_request:
 
+env:
+  MPLBACKEND: Agg
+  PYTEST_ADDOPTS: --color=yes
+
 jobs:
   tests: 
 
