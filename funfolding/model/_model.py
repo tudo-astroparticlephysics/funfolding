@@ -1005,7 +1005,7 @@ class LinearModelSystematics(LinearModel):
                                 offset=p[1])
                         else:
                             raise cache_error
-                    elif isinstance(p, np.array):
+                    elif isinstance(p, np.ndarray):
                         self.cache_precision[i] = ArrayCacheTransformation(p)
                     else:
                         raise cache_error
