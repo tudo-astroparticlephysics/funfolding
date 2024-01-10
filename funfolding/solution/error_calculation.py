@@ -16,8 +16,8 @@ def calc_errors_llh(sample,
             a = sample[:, i] / precision_f
             sample[:, i] = np.floor((a + 0.5)) * precision_f
     interval = int(len(probs) * (norm.cdf(sigma) - norm.cdf(-sigma))) + 1
-    interval_limits = int(len(probs) * (norm.cdf(sigma_limits) -
-                                        norm.cdf(-sigma_limits))) + 1
+    interval_limits = int(len(probs) * (norm.cdf(sigma_limits)
+                                        - norm.cdf(-sigma_limits))) + 1
     order = np.argsort(probs)
     selected = sample[np.sort(order[:interval]), :]
     sigma_vec_best = np.zeros((2, sample.shape[1]))
@@ -46,8 +46,8 @@ def calc_feldman_cousins_errors(best_fit,
             a = sample[:, i] / precision_f
             sample[:, i] = np.floor((a + 0.5)) * precision_f
     interval = int(sample.shape[0] * (norm.cdf(sigma) - norm.cdf(-sigma))) + 1
-    interval_limits = int(sample.shape[0] * (norm.cdf(sigma_limits) -
-                                             norm.cdf(-sigma_limits))) + 1
+    interval_limits = int(sample.shape[0] * (norm.cdf(sigma_limits)
+                                             - norm.cdf(-sigma_limits))) + 1
     diff = np.absolute(sample - best_fit)
     sigma_vec_best = np.zeros((2, len(best_fit)))
     for i in range(len(best_fit)):
