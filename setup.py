@@ -10,7 +10,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='funfolding',
-    version='0.2.2',
+    version='0.3.0',
 
     description='Having fun with unfolding.',
     long_description=long_description,
