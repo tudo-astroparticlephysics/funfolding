@@ -46,7 +46,8 @@ setup(
         'scipy',
         'six>=1.1',
     ],
-    extras_require={':python_version == "2.7"': ['futures']},
-    setup_requires=['pytest-runner'],
-    tests_require=['pytest'],
+    extras_require={
+        ':python_version == "2.7"': ['futures'],
+        'tests': ['pytest'],
+    },
 )

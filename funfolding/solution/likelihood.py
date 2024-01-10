@@ -127,16 +127,16 @@ class StandardLLH(LLH):
             elif callable(self.tau):
                 self._tau = self.tau(np.arange(model.dim_f))
                 self._tau = self._tau[self._f_slice]
-            elif isinstance(self.tau, np.array) or \
+            elif isinstance(self.tau, np.ndarray) or \
                     isinstance(self.tau, list) or \
                     isinstance(self.tau, tuple):
-                if len(self.tau) == model.dim_f:
+                if len(self.tau) == eff_f_length:
                     self._tau = np.array(self.tau)
                 else:
                     raise ValueError(
                         "Length of 'tau'={} invalid! {} needed".format(
                             len(self.tau),
-                            model.dim_f))
+                            eff_f_length))
             else:
                 raise ValueError("'tau' as to be either None, float, array or "
                                  "callable!")
@@ -167,8 +167,8 @@ class StandardLLH(LLH):
         if self._tau is not None:
             f_reg = f_reg[self._f_slice]
             if self.log_f_reg:
-                f_reg_used = np.log10((f_reg + self.log_f_offset) *
-                                      self.reg_factor_f)
+                f_reg_used = np.log10((f_reg + self.log_f_offset)
+                                      * self.reg_factor_f)
             else:
                 f_reg_used = f_reg * self.reg_factor_f
             reg_part = 0.5 * np.dot(
@@ -444,8 +444,8 @@ class SystematicLLH(StandardLLH):
         if self._tau is not None:
             f_reg = f_reg[self._f_slice]
             if self.log_f_reg:
-                f_reg_used = np.log10((f_reg + self.log_f_offset) *
-                                      self.reg_factor_f)
+                f_reg_used = np.log10((f_reg + self.log_f_offset)
+                                      * self.reg_factor_f)
             else:
                 f_reg_used = f_reg * self.reg_factor_f
                 if any(np.isnan(f_reg_used)):
@@ -543,8 +543,8 @@ class StandardLLH_offset_before_log(StandardLLH):
                         if i == j:
                             r_diag = -self.reg_factor_f[j]**2 / ln_10_squared
                             r_diag = f_used**2
-                            r_diag = np.sum((self._C[i, :] + self._C[:, i]) *
-                                            ln_f_used)
+                            r_diag = np.sum((self._C[i, :] + self._C[:, i])
+                                            * ln_f_used)
                             reg_part[i, i] = r + r_diag
                         else:
                             reg_part[i, j] = r
