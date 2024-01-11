@@ -36,9 +36,7 @@ def plot_hexbins(ax,
         **hex_kwargs)
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="8%", pad=0.05)
-    cb = matplotlib.colorbar.ColorbarBase(cax,
-                                          cmap=cmap,
-                                          norm=norm)
+    cb = cax.figure.colorbar(norm=norm, cmap=cmap)
     return cb
 
 

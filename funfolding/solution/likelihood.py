@@ -228,19 +228,10 @@ class StandardLLH(LLH):
         h_unreg -= part_b
         if self._tau is not None:
             if self.log_f_reg:
-                reg_part = np.zeros(self.model.dim_f)
                 denom_f = f_reg + self.log_f_offset
                 nom_f = np.log(denom_f * self.reg_factor_f)
-                ln_10_squared = np.log(10)**2
-                pre = np.zeros((self.model.dim_f,
-                                self.model.dim_f))
-                for i in range(self.model.dim_f):
-                    for j in range(self.model.dim_f):
-                        pre[i, j] = self._C[i, j] * nom_f[i]
-                        pre[i, j] /= ln_10_squared * denom_f[i]
-                for i in range(self.model.dim_f):
-                    reg_part[i] = np.sum(pre[i, :])
-                    reg_part[i] += np.sum(pre[:, i])
+                pre = (self._C.T * (nom_f / denom_f)).T / np.log(10)**2
+                reg_part = np.sum(pre, axis=0) + np.sum(pre, axis=1)
             else:
                 reg_part = np.dot(self._C, f_reg * self.reg_factor_f)
         else:
@@ -349,34 +340,20 @@ class LLHThikonovForLoops(LLH):
 
     def evaluate_llh(self, f):
         m, n = self.linear_model.A.shape
-        poisson_part = 0
-        for i in range(m):
-            g_est = 0
-            for j in range(n):
-                g_est += self.linear_model.A[i, j] * f[j]
-            poisson_part += g_est - self.g[i] * np.log(g_est)
-
-        reg_part = 0
-        for i in range(n):
-            for j in range(n):
-                reg_part += self.C[i, j] * f[i] * f[j]
-        reg_part *= 0.5 * self.tau
+        g_est = np.dot(self.linear_model.A * f)
+        poisson_part = np.sum(g_est - self.g * np.log(g_est))
+        reg_part = np.dot(np.dot(self.C, f), f) * 0.5 * self.tau
         return reg_part - poisson_part
 
     def evaluate_gradient(self, f):
         m, n = self.linear_model.A.shape
         gradient = np.zeros(n)
+        g_est = np.dot(self.linear_model.A, f)
         for k in range(n):
-            poisson_part = 0
-            for i in range(m):
-                g_est = 0
-                for j in range(n):
-                    g_est += self.linear_model.A[i, j] * f[j]
-                A_ik = self.linear_model.A[i, k]
-                poisson_part += A_ik - (self.g[i] * A_ik) / g_est
-            c = 0
-            for i in range(n):
-                c += self.C[i, k] * f[i]
+            A_k = self.linear_model.A[:, k]
+            poisson_part = np.sum(A_k - (self.g * A_k) / g_est)
+
+            c = np.dot(self.C[:, k], f)
             reg_part = self.tau * c
             gradient[k] = reg_part - poisson_part
         return gradient
@@ -384,18 +361,15 @@ class LLHThikonovForLoops(LLH):
     def evaluate_hessian(self, f):
         m, n = self.linear_model.A.shape
         hess = np.zeros((n, n))
-        for k in range(n):
-            for l in range(n):
+        denominator = np.dot(self.linear_model.A, f)
+        for i in range(n):
+            for j in range(n):
                 poisson_part = 0
-                for i in range(m):
-                    A_ik = self.linear_model.A[i, k]
-                    A_il = self.linear_model.A[i, l]
-                    nominator = self.g[i] * A_ik * A_il
-                    denominator = 0
-                    for j in range(n):
-                        denominator += self.linear_model.A[i, j] * f[j]
-                    poisson_part += nominator / denominator**2
-                hess[k, l] = poisson_part + self.tau * self.C[k, l]
+                A_i = self.linear_model.A[:, i]
+                A_j = self.linear_model.A[:, j]
+                nominator = self.g * A_i * A_j
+                poisson_part = np.sum(nominator / denominator**2)
+                hess[i, j] = poisson_part + self.tau * self.C[i, j]
         return hess
 
 

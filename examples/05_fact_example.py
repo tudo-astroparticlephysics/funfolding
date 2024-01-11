@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import matplotlib
 
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 
 from matplotlib import pyplot as plt
 import matplotlib.colors as colors
@@ -295,7 +295,7 @@ if __name__ == '__main__':
     svd_values = tree_model_uniform.evaluate_condition()
     ax.hist(bin_centers,
             bins=bin_edges,
-            ooweights=svd_values,
+            weights=svd_values,
             histtype='step',
             label='Tree Based ({} Bins; Uniform)'.format(tree_binning.n_bins))
 
