@@ -1,0 +1,32 @@
+name: Deploy to PyPi
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  pypi:
+    name: Publish packages to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/funfolding
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          pip install -U build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish distribution 📦 to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

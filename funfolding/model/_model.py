@@ -3,7 +3,6 @@ import numpy as np
 from scipy import linalg
 from scipy import stats
 from numpy.linalg import svd
-import six
 
 
 class Model(object):
@@ -1174,7 +1173,7 @@ class LinearModelSystematics(LinearModel):
             x0_i = vec_x_0_def[x0_slice]
             if sample_x0 is None:
                 pos_x0_i = x0_i
-            elif isinstance(sample_x0, six.string_types):
+            elif isinstance(sample_x0, str):
                 if sample_x0 == 'poisson':
                     pos_x0_i = self.random_state.poisson(x0_i,
                                                          size=size)

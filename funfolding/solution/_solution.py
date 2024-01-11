@@ -3,7 +3,6 @@ import warnings
 import numpy as np
 from scipy import linalg
 from scipy.optimize import minimize
-import six
 
 import emcee
 
@@ -323,7 +322,7 @@ class LLHSolutionMCMC(Solution):
                     sigma_limits=error_interval_sigma_limits,
                     n_nuissance=self.model.n_nuissance_parameters)
         if thin is not None:
-            if isinstance(thin, six.string_types):
+            if isinstance(thin, str):
                 if thin.lower() == 'autocorr':
                     thin = int(np.max(autocorr_time[0]) + 0.5)
             if isinstance(thin, int):
