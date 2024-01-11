@@ -1,5 +1,4 @@
 import numpy as np
-import six
 
 from ..model import LinearModel, Model
 
@@ -108,7 +107,7 @@ class StandardLLH(LLH):
 
         if self.tau is None:
             self._tau = None
-        elif isinstance(self.tau, six.string_types):
+        elif isinstance(self.tau, str):
             if self._tau.lower() == 'None':
                 self._tau = None
         else:

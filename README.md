@@ -45,9 +45,8 @@ want to install the available packages via `conda` first.
 matplotlib
 numpy
 pymc3
-scikit-learn>=0.18.1
+scikit-learn>=0.19.0
 scipy
-six
 ```
 
 ### Installing
