@@ -1,13 +1,11 @@
 import numpy as np
 import copy
 
-import sklearn
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
 
 from ._binning import Binning
 import warnings
-
 
 
 def __sample_uniform__(y, sample_weight=None, random_state=None):

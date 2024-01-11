@@ -141,7 +141,7 @@ class StandardLLH(LLH):
                                  "callable!")
             if self._tau is not None:
                 m_C = None
-                if isinstance(self.C, six.string_types):
+                if isinstance(self.C, str):
                     if self.C.lower() == 'thikonov' or self.C.lower() == '2':
                         m_C = create_C_thikonov(
                             eff_f_length)
