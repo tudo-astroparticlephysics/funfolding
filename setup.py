@@ -8,6 +8,13 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
+
+extras_require = {
+    'tests': ['pytest'],
+    'docs': ['sphinx', 'sphinx-rtd-theme'],
+}
+extras_require['all'] = extras_require['tests'] + extras_require['docs']
+
 setup(
     name='funfolding',
     version='0.3.0',
@@ -47,7 +54,5 @@ setup(
         'scikit-learn>=0.19.0',
         'scipy',
     ],
-    extras_require={
-        'tests': ['pytest'],
-    },
+    extras_require=extras_require,
 )
