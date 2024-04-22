@@ -191,7 +191,7 @@ class LinearModel(Model):
         vec_g = np.dot(self.A, vec_fit)
         if self.has_background:
             vec_g += self.vec_b
-        return vec_g, vec_fit, vec_fit
+        return vec_g, vec_fit
 
     def generate_fit_x0(self, vec_g, vec_f_0=None, size=None):
         """Generates a default seed for the minimization.

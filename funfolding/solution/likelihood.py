@@ -3,19 +3,10 @@ import numpy as np
 from ..model import LinearModel, Model
 
 
-def create_C_thikonov(n_dims,
-                      ignore_n_bins_low=0,
-                      ignore_n_bins_high=0):
-    C = np.zeros((n_dims, n_dims))
-    C[ignore_n_bins_low, ignore_n_bins_low] = -1
-    C[ignore_n_bins_low, ignore_n_bins_low + 1] = 1
-    idx_N = n_dims - 1 - ignore_n_bins_high
-    C[idx_N, idx_N] = -1
-    C[idx_N, idx_N - 1] = 1
-    for i in range(1 + ignore_n_bins_low, idx_N):
-        C[i, i] = -2.
-        C[i, i - 1] = 1
-        C[i, i + 1] = 1
+def create_C_thikonov(n_dims):
+    C = -2 * np.eye(n_dims) + np.eye(n_dims, k=1) + np.eye(n_dims, k=-1)
+    C = C[1:-1, :]
+
     return C
 
 
@@ -107,9 +98,11 @@ class StandardLLH(LLH):
 
         if self.tau is None:
             self._tau = None
+            self._f_slice = slice(model.dim_f)
         elif isinstance(self.tau, str):
             if self._tau.lower() == 'None':
                 self._tau = None
+                self._f_slice = slice(model.dim_f)
         else:
             self._f_slice = slice(ignore_n_bins_low,
                                   model.dim_f - ignore_n_bins_high)
@@ -151,7 +144,7 @@ class StandardLLH(LLH):
                 if m_C is None:
                     raise ValueError("{} invalid option for 'C'".format(
                         self.C))
-                self._C = np.dot(np.dot(m_C, np.diag(1 / self._tau)), m_C)
+                self._C = np.dot(np.dot(np.diag(1 / self._tau), m_C.T), m_C)
 
         if isinstance(model, LinearModel):
             self.gradient_defined = True
@@ -159,8 +152,8 @@ class StandardLLH(LLH):
 
     def evaluate_llh(self, fit_params):
         super(StandardLLH, self).evaluate_llh()
-        g_est, f, f_reg = self.model.evaluate(fit_params)
-        if any(g_est < 0) or any(f < 0):
+        g_est, f_reg = self.model.evaluate(fit_params)
+        if any(g_est < 0) or any(f_reg < 0):
             return np.inf * -1
         poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
         if self._tau is not None:
@@ -222,7 +215,7 @@ class StandardLLH(LLH):
 
     def evaluate_gradient(self, f):
         super(StandardLLH, self).evaluate_gradient()
-        g_est, f, f_reg = self.model.evaluate(f)
+        g_est, f_reg = self.model.evaluate(f)
         part_b = np.sum(self.model.A, axis=0)
         h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
         h_unreg -= part_b
@@ -249,10 +242,11 @@ class StandardLLH(LLH):
 
     def evaluate_hessian(self, f):
         super(StandardLLH, self).evaluate_hessian()
-        g_est, f, f_reg = self.model.evaluate(f)
+        g_est, f_reg = self.model.evaluate(f)
+        f_reg = f_reg[self._f_slice]
         H_unreg = -np.dot(np.dot(self.model.A.T,
                                  np.diag(self.vec_g / g_est**2)),
-                          self.model.A)
+                          self.model.A)[self._f_slice, self._f_slice]
         if self._tau is not None:
             if self.log_f_reg:
                 reg_part = self._C + self._C.T
@@ -265,7 +259,6 @@ class StandardLLH(LLH):
                 reg_part /= denom
             else:
                 reg_part = self._C
-            reg_part /= denom
         else:
             reg_part = 0.
 
@@ -306,7 +299,7 @@ class StepLLH(LLH):
     def evaluate_llh(self, a):
         super(StepLLH, self).evaluate_llh()
         f = self.__previous_f + a * self.__step
-        g_est, f, _ = self.model.evaluate(f)
+        g_est, f = self.model.evaluate(f)
         if any(g_est < 0) or any(f < 0):
             return np.inf * -1
         poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
@@ -315,7 +308,7 @@ class StepLLH(LLH):
     def evaluate_gradient(self, a):
         super(StepLLH, self).evaluate_gradient()
         f = self.__previous_f + a * self.__step
-        g_est, f, _ = self.model.evaluate(f)
+        g_est, f = self.model.evaluate(f)
         A_delta = np.dot(self.model.A, self.__step)
         part_b = np.sum(A_delta, axis=0)
         h_unreg = np.sum(A_delta * (1 / g_est), axis=1)
@@ -325,7 +318,7 @@ class StepLLH(LLH):
     def evaluate_hessian(self, a):
         super(StepLLH, self).evaluate_hessian()
         f = self.__previous_f + a * self.__step
-        g_est, f, _ = self.model.evaluate(f)
+        g_est, f = self.model.evaluate(f)
         A_delta = np.dot(self.model.A, self.__step)
         H_unreg = - (self.vec_g * A_delta**2) / g_est**2
         return H_unreg
@@ -432,12 +425,12 @@ class SystematicLLH(StandardLLH):
 
     def evaluate_llh(self, fit_params):
         super(StandardLLH, self).evaluate_llh()
-        g_est, f, f_reg = self.model.evaluate(fit_params)
+        g_est, f_reg = self.model.evaluate(fit_params)
         try:
-            if any(g_est < 0) or any(f < 0):
+            if any(g_est < 0) or any(f_reg[:self.model.dim_f] < 0):
                 return np.inf * -1
         except TypeError:
-            print(g_est, f, f_reg)
+            print(g_est, f_reg)
             raise TypeError
         poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
         if self._tau is not None:
@@ -467,8 +460,8 @@ class SystematicLLH(StandardLLH):
     def evaluate_gradient(self, f):
         raise NotImplementedError()
 
-    def evaluate_hessian(self, f):
-        raise NotImplementedError()
+    # def evaluate_hessian(self, f):
+    #     raise NotImplementedError()
 
 
 class StandardLLH_offset_before_log(StandardLLH):
@@ -477,8 +470,8 @@ class StandardLLH_offset_before_log(StandardLLH):
 
     def evaluate_llh(self, f):
         super(StandardLLH, self).evaluate_llh()
-        g_est, f, f_reg = self.model.evaluate(f)
-        if any(g_est < 0) or any(f < 0):
+        g_est, f_reg = self.model.evaluate(f)
+        if any(g_est < 0) or any(f_reg < 0):
             return np.inf * -1
         poisson_part = np.sum(self.vec_g * np.log(g_est) - g_est)
         if self._tau is not None:
@@ -493,7 +486,7 @@ class StandardLLH_offset_before_log(StandardLLH):
 
     def evaluate_gradient(self, f):
         super(StandardLLH, self).evaluate_gradient()
-        g_est, f, f_reg = self.model.evaluate(f)
+        g_est, f_reg = self.model.evaluate(f)
         part_b = np.sum(self.model.A, axis=0)
         h_unreg = np.sum(self.model.A.T * self.vec_g * (1 / g_est), axis=1)
         h_unreg -= part_b
@@ -523,7 +516,7 @@ class StandardLLH_offset_before_log(StandardLLH):
 
     def evaluate_hessian(self, f):
         super(StandardLLH, self).evaluate_hessian()
-        g_est, f, f_reg = self.model.evaluate(f)
+        g_est, f_reg = self.model.evaluate(f)
         H_unreg = -np.dot(np.dot(self.model.A.T,
                                  np.diag(self.vec_g / g_est**2)),
                           self.model.A)
