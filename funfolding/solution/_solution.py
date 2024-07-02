@@ -1,5 +1,6 @@
 import warnings
 
+from iminuit import Minuit
 import numpy as np
 from scipy import linalg
 from scipy.optimize import minimize
@@ -199,6 +200,59 @@ class LLHSolutionGradientDescent(LLHSolutionMinimizer):
             gradient[i, :] = self.llh.evaluate_gradient(x[i, :])
             hessian[i, :, :] = self.llh.evaluate_hessian(x[i, :])
         return x, llh, gradient, hessian
+
+
+class LLHSolutionMinuit(Solution):
+    name = 'LLHSolutionMinuit'
+    status_need_for_fit = 1
+
+    def __init__(self):
+        super(LLHSolutionMinuit, self).__init__()
+        self.llh = None
+        self.vec_g = None
+        self.bounds = None
+        self.model = None
+
+    def initialize(self, model, llh):
+        super(LLHSolutionMinuit, self).initialize()
+        self.llh = llh
+        self.vec_g = llh.vec_g
+        self.model = model
+
+    def set_x0_and_bounds(self, x0=None, bounds=(0, None)):
+        super(LLHSolutionMinuit, self).set_x0_and_bounds()
+        if x0 is None:
+            x0 = self.model.generate_fit_x0(self.vec_g, size=None)
+        self.x0 = x0
+        self.bounds = bounds
+
+    def fit(self, ncall=None, simplex=False, errordef=Minuit.LIKELIHOOD, fixed=[]):
+        super(LLHSolutionMinuit, self).fit()
+        # Initialize Minuit to minimize neg llh
+        m = Minuit(self.llh.evaluate_neg_llh, self.x0)
+        # Calculate correct uncertainties for neg llh
+        m.errordef = errordef
+        # Set bounds
+        m.limits = self.bounds
+        # Fix parameters
+        for index in fixed:
+            m.fixed[index] = True
+        # Do ncall-dimensional grid scan
+        if ncall is not None:
+            m.scan(ncall=ncall)
+        # Run simplex for robustness
+        if simplex:
+            m.simplex()
+        # Find minimum
+        m.migrad()
+        m.hesse()
+
+        # Extract results
+        values = np.array(m.values)
+        errors = np.array(m.errors)
+        cov = np.array(m.covariance)
+
+        return values, errors, cov, m.valid
 
 
 class LLHSolutionMCMC(Solution):

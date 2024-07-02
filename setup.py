@@ -48,6 +48,7 @@ setup(
     install_requires=[
         'corner',
         'emcee>=3.0',
+        'iminuit',
         'matplotlib',
         'numpy',
         'pymc3',
