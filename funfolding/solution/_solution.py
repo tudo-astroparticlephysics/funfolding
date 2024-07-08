@@ -266,6 +266,7 @@ class LLHSolutionMCMC(Solution):
 
     def __init__(self,
                  error_calc='bayesian',
+                 move_object=emcee.moves.StretchMove(),
                  n_walkers=100,
                  n_used_steps=2000,
                  n_burn_steps=1000,
@@ -284,6 +285,7 @@ class LLHSolutionMCMC(Solution):
         self.n_burn_steps = n_burn_steps
 
         self.x0 = None
+        self.move_object = move_object
 
     def initialize(self, model, llh):
         super(LLHSolutionMCMC, self).initialize()
@@ -398,7 +400,9 @@ class LLHSolutionMCMC(Solution):
     def __initiallize_mcmc__(self):
         return emcee.EnsembleSampler(nwalkers=self.n_walkers,
                                      ndim=self.model.dim_fit_vector,
-                                     log_prob_fn=self.llh)
+                                     log_prob_fn=self.llh,
+                                     moves=self.move_object
+                                     )
 
     def __run_mcmc__(self, sampler, x0, n_steps):
         sampler.run_mcmc(initial_state=x0,
