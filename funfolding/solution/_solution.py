@@ -226,7 +226,12 @@ class LLHSolutionMinuit(Solution):
         self.x0 = x0
         self.bounds = bounds
 
-    def fit(self, ncall=None, simplex=False, errordef=Minuit.LIKELIHOOD, fixed=[]):
+    def fit(self,
+            ncall=None,
+            simplex=False,
+            minos=False,
+            errordef=Minuit.LIKELIHOOD,
+            fixed=[]):
         super(LLHSolutionMinuit, self).fit()
         # Initialize Minuit to minimize neg llh
         m = Minuit(self.llh.evaluate_neg_llh, self.x0)
@@ -246,13 +251,11 @@ class LLHSolutionMinuit(Solution):
         # Find minimum
         m.migrad()
         m.hesse()
+        # Run minos for asymmetrical errors
+        if minos:
+            m.minos()
 
-        # Extract results
-        values = np.array(m.values)
-        errors = np.array(m.errors)
-        cov = np.array(m.covariance)
-
-        return values, errors, cov, m.valid
+        return m
 
 
 class LLHSolutionMCMC(Solution):
