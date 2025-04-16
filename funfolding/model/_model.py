@@ -454,18 +454,17 @@ class PolynominalSytematic(object):
             sample_weights = [None] * len(x)
         vector_g = []
         rel_uncert = []
-        mean_w = None
         for y_i, w_i in zip(digitized_obs, sample_weights):
-            if w_i is not None:
-                if mean_w is None:
-                    mean_w = np.mean(sample_weights[baseline_idx])
-                w_i = w_i / mean_w
             vector_g.append(np.bincount(y_i,
                                         weights=w_i,
-                                        minlength=minlength_vec_g))
-            rel_uncert.append(np.sqrt(np.bincount(y_i,
-                                      weights=w_i**2,
-                                      minlength=minlength_vec_g)))
+                                        minlength=minlength_vec_g).astype(np.float64))
+            if w_i is not None:
+                rel_uncert.append(np.sqrt(np.bincount(y_i,
+                                          weights=w_i**2,
+                                          minlength=minlength_vec_g)))
+            else:
+                rel_uncert.append(np.sqrt(np.bincount(y_i,
+                                          minlength=minlength_vec_g)))
         del digitized_obs
         del sample_weights
         n_bins = np.unique(len(g) for g in vector_g)
@@ -1108,7 +1107,7 @@ class LinearModelSystematics(LinearModel):
         vec_g = np.dot(A, vec_f)
         if self.has_background:
             vec_g += self.vec_b
-        return vec_g, vec_fit, vec_fit
+        return vec_g, vec_fit
 
     def __get_systematic_event_factors(self,
                                        systematic,

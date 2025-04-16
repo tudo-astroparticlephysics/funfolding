@@ -228,6 +228,7 @@ class LLHSolutionMinuit(Solution):
 
     def fit(self,
             ncall=None,
+            hesse=True,
             simplex=False,
             minos=False,
             errordef=Minuit.LIKELIHOOD,
@@ -250,7 +251,9 @@ class LLHSolutionMinuit(Solution):
             m.simplex()
         # Find minimum
         m.migrad()
-        m.hesse()
+        # Run hesse for more accurate uncertainties
+        if hesse:
+            m.hesse()
         # Run minos for asymmetrical errors
         if minos:
             m.minos()
