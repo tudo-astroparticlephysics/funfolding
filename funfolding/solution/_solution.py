@@ -232,7 +232,8 @@ class LLHSolutionMinuit(Solution):
             simplex=False,
             minos=False,
             errordef=Minuit.LIKELIHOOD,
-            fixed=[]):
+            fixed=[],
+            tol=None):
         super(LLHSolutionMinuit, self).fit()
         # Initialize Minuit to minimize neg llh
         m = Minuit(self.llh.evaluate_neg_llh, self.x0)
@@ -240,6 +241,9 @@ class LLHSolutionMinuit(Solution):
         m.errordef = errordef
         # Set bounds
         m.limits = self.bounds
+        # Set tolerance
+        if tol is not None:
+            m.tol = tol
         # Fix parameters
         for index in fixed:
             m.fixed[index] = True

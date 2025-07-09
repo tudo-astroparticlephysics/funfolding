@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import norm
+from scipy.optimize import curve_fit
 
 
 def calc_errors_llh(sample,
@@ -147,3 +148,47 @@ def bayesian_parameter_estimation(sample,
     sigma_vec_best[0, :] = spectrum[0, :]
     sigma_vec_best[1, :] = spectrum[2, :]
     return best_fit, sigma_vec_best
+
+
+def gauss(x, loc=0., scale=1., N=1.):
+    _norm = norm(loc=loc, scale=scale)
+    return N * _norm.pdf(x)
+
+
+def sample_limits(sample, min_coverage=None, upper_limit=95.):
+    """Check the covarge of the unfolding sample and
+    give upper limits if needed.
+
+    Parameters
+    ----------
+    sample: array_like
+        Unfolding sample.
+
+    min_coverage: float, optional
+        Minimum required coverage.
+
+    Returns
+    -------
+    """
+    coverage = []
+    upper_limits = []
+    for i, bindist in enumerate(sample.T):
+        # Define the fit range
+        bins = np.linspace(min(bindist), max(bindist))
+        bincenters = bins[:-1] + np.diff(bins)/2
+
+        # Fit counts
+        h = np.histogram(bindist, bins=bins)[0]
+        popt, pcov = curve_fit(
+            gauss, bincenters, h, p0=[np.mean(bindist), np.std(bindist), np.sum(h)]
+        )
+        g = norm(loc=popt[0], scale=np.abs(popt[1]))
+
+        # Check if upper limit should be used
+        if min_coverage is not None:
+            coverage.append(g.sf(0) > min_coverage)
+        else:
+            coverage.append(popt[0] - np.abs(popt[1]) > 0)
+        upper_limits.append(g.ppf(upper_limit / 100.))
+
+    return np.array(coverage), np.array(upper_limits)
